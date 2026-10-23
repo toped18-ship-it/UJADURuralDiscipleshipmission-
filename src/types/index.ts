@@ -30,6 +30,7 @@ export interface AudioTeaching {
   category: 'Sermon' | 'Discipleship Series' | 'Evangelism' | 'Devotionals' | 'Prayer' | 'Leadership';
   scripture_reference: string;
   audio_storage_path: string;
+  audio_file_id?: string;
   cover_storage_path?: string;
   duration_seconds: number;
   published: boolean;

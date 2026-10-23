@@ -1,3 +1,4 @@
+import { AudioStore } from '../lib/audioStore';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import {
   AdminStats,
@@ -5,6 +6,7 @@ import {
   BlogPost,
   ContactMessage,
   GalleryItem,
+  NewsletterSubscriber,
   SiteSettings,
 } from '../types';
 
@@ -444,7 +446,15 @@ export class DataService {
   }
 
   // --- FILE UPLOAD HELPERS ---
-  static async uploadAudioFile(file: File): Promise<{ url: string; duration: number; fileName: string; fileSize: string }> {
+  // --- FILE UPLOAD HELPERS ---
+  static async uploadAudioFile(file: File): Promise<{
+    url: string;
+    objectUrl: string;
+    duration: number;
+    fileName: string;
+    fileSize: string;
+    audioFileId: string;
+  }> {
     const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
     const fileSizeStr = file.size >= 1024 * 1024 ? `${sizeInMB} MB` : `${Math.round(file.size / 1024)} KB`;
 
@@ -472,10 +482,13 @@ export class DataService {
 
     const duration = await getDuration(file);
 
-    // If Supabase Storage is configured, upload to audio-teachings bucket
+    // Save binary data to high-capacity client-side IndexedDB for unlimited local uploads
+    const audioFileId = `aud-file-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const { idbRef, objectUrl } = await AudioStore.saveAudioFile(audioFileId, file);
+
+    // If Supabase Storage is configured, also attempt upload to audio-teachings bucket
     if (isSupabaseConfigured) {
       try {
-        const fileExt = file.name.split('.').pop() || 'mp3';
         const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const filePath = `sermons/${Date.now()}_${cleanName}`;
         const { error: uploadError } = await supabase.storage
@@ -489,37 +502,32 @@ export class DataService {
           if (publicUrlData?.publicUrl) {
             return {
               url: publicUrlData.publicUrl,
+              objectUrl,
               duration,
               fileName: file.name,
               fileSize: fileSizeStr,
+              audioFileId,
             };
           }
         }
       } catch (err) {
-        console.warn('Supabase storage upload error, falling back:', err);
+        console.warn('Supabase storage upload error, using local high-capacity storage:', err);
       }
     }
 
-    // High fidelity browser fallback: Base64 Data URL
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        resolve({
-          url: reader.result as string,
-          duration,
-          fileName: file.name,
-          fileSize: fileSizeStr,
-        });
-      };
-      reader.onerror = () => reject(new Error('Failed to read audio file'));
-      reader.readAsDataURL(file);
-    });
+    return {
+      url: idbRef,
+      objectUrl,
+      duration,
+      fileName: file.name,
+      fileSize: fileSizeStr,
+      audioFileId,
+    };
   }
 
   static async uploadImageFile(file: File, bucket = 'branding-assets'): Promise<string> {
     if (isSupabaseConfigured) {
       try {
-        const fileExt = file.name.split('.').pop() || 'jpg';
         const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const filePath = `covers/${Date.now()}_${cleanName}`;
         const { error: uploadError } = await supabase.storage
@@ -553,16 +561,37 @@ export class DataService {
         if (!includeUnpublished) query = query.eq('published', true);
         if (category && category !== 'All') query = query.eq('category', category);
         const { data, error } = await query;
-        if (!error && data) return data as AudioTeaching[];
+        if (!error && data && data.length > 0) return data as AudioTeaching[];
       } catch (err) {
         console.error('Supabase getAudioTeachings error:', err);
       }
     }
 
-    let items = getStoredItem<AudioTeaching[]>(STORAGE_KEYS.AUDIO, DEFAULT_AUDIO);
-    if (!includeUnpublished) items = items.filter((i) => i.published);
-    if (category && category !== 'All') items = items.filter((i) => i.category === category);
-    return items.sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime());
+    const items = getStoredItem<AudioTeaching[]>(STORAGE_KEYS.AUDIO, DEFAULT_AUDIO);
+
+    // Resolve any IndexedDB audio references to live playable/downloadable object URLs
+    const resolvedItems = await Promise.all(
+      items.map(async (item) => {
+        let storagePath = item.audio_storage_path;
+        const fileId = item.audio_file_id || (storagePath?.startsWith('idb://') ? storagePath.replace('idb://', '') : null);
+        if (fileId) {
+          const liveUrl = await AudioStore.getAudioUrl(fileId);
+          if (liveUrl) {
+            storagePath = liveUrl;
+          }
+        }
+        return {
+          ...item,
+          audio_storage_path: storagePath,
+          cover_storage_path: item.cover_storage_path || 'https://images.unsplash.com/photo-1507692049790-de58290a4334?auto=format&fit=crop&w=600&q=80',
+        };
+      })
+    );
+
+    let filtered = resolvedItems;
+    if (!includeUnpublished) filtered = filtered.filter((i) => i.published);
+    if (category && category !== 'All') filtered = filtered.filter((i) => i.category === category);
+    return filtered.sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime());
   }
 
   static async getAudioById(id: string): Promise<AudioTeaching | null> {
@@ -572,10 +601,29 @@ export class DataService {
 
   static async saveAudioTeaching(item: Partial<AudioTeaching>): Promise<AudioTeaching> {
     const now = new Date().toISOString();
+
+    // Ensure we keep the persistent idb:// reference in stored metadata rather than volatile blob: URL
+    let persistentAudioPath = item.audio_storage_path || SAMPLE_AUDIO_URL;
+    let fileId = item.audio_file_id;
+
+    if (!fileId && persistentAudioPath.startsWith('idb://')) {
+      fileId = persistentAudioPath.replace('idb://', '');
+    }
+
+    // If audio path is a blob URL from an uploaded file with an ID, keep the IDB reference for persistence
+    if (fileId && (persistentAudioPath.startsWith('blob:') || (!persistentAudioPath.startsWith('idb://') && !persistentAudioPath.startsWith('http')))) {
+      persistentAudioPath = `idb://${fileId}`;
+    }
+
     let saved: AudioTeaching;
 
     if (item.id) {
-      saved = { ...item, updated_at: now } as AudioTeaching;
+      saved = {
+        ...item,
+        audio_file_id: fileId,
+        audio_storage_path: persistentAudioPath,
+        updated_at: now,
+      } as AudioTeaching;
     } else {
       saved = {
         id: `aud-${Date.now()}`,
@@ -583,8 +631,9 @@ export class DataService {
         speaker: item.speaker || 'UJADU Mission Preacher',
         description: item.description || '',
         category: item.category || 'Discipleship Series',
-        scripture_reference: item.scripture_reference || 'John 3:16',
-        audio_storage_path: item.audio_storage_path || SAMPLE_AUDIO_URL,
+        scripture_reference: item.scripture_reference || '',
+        audio_file_id: fileId,
+        audio_storage_path: persistentAudioPath,
         cover_storage_path: item.cover_storage_path || 'https://images.unsplash.com/photo-1507692049790-de58290a4334?auto=format&fit=crop&w=600&q=80',
         duration_seconds: item.duration_seconds || 1800,
         published: item.published ?? true,
@@ -610,6 +659,16 @@ export class DataService {
       current.unshift(saved);
     }
     setStoredItem(STORAGE_KEYS.AUDIO, current);
+
+    // If path is idb://, return with resolved live blob URL so the UI can play it immediately
+    if (saved.audio_storage_path.startsWith('idb://')) {
+      const liveId = saved.audio_storage_path.replace('idb://', '');
+      const liveUrl = await AudioStore.getAudioUrl(liveId);
+      if (liveUrl) {
+        return { ...saved, audio_storage_path: liveUrl };
+      }
+    }
+
     return saved;
   }
 
@@ -623,6 +682,13 @@ export class DataService {
     }
 
     const current = getStoredItem<AudioTeaching[]>(STORAGE_KEYS.AUDIO, DEFAULT_AUDIO);
+    const itemToDelete = current.find((a) => a.id === id);
+    if (itemToDelete) {
+      const fileId = itemToDelete.audio_file_id || (itemToDelete.audio_storage_path?.startsWith('idb://') ? itemToDelete.audio_storage_path.replace('idb://', '') : null);
+      if (fileId) {
+        await AudioStore.deleteAudioFile(fileId);
+      }
+    }
     const filtered = current.filter((a) => a.id !== id);
     setStoredItem(STORAGE_KEYS.AUDIO, filtered);
     return true;
