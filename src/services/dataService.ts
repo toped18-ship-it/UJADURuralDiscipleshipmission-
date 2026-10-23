@@ -9,7 +9,7 @@ import {
 import { AudioStore } from '../lib/audioStore';
 import { auth, db, isFirebaseConfigured } from '../lib/firebase';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
-import { AudioTeaching, BlogPost, ContactMessage, CustomPage, GalleryItem, NewsletterSubscriber, SiteSettings, AdminStats } from '../types';
+import { AudioTeaching, BlogPost, ContactMessage, CustomPage, GalleryItem, NewsletterSubscriber, SiteSettings, AdminStats, AboutContent } from '../types';
 import { sanitizeForFirestore, sanitizeSlides } from '../utils/slideHelper';
 
 // FIRESTORE ERROR HANDLING IN ACCORDANCE WITH FIREBASE INTEGRATION SKILL
@@ -92,6 +92,138 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
   social_facebook: 'https://facebook.com/ujadumission',
   social_youtube: 'https://youtube.com/ujadumission',
   social_whatsapp: 'https://wa.me/2348066456672',
+};
+
+export const DEFAULT_ABOUT_CONTENT: AboutContent = {
+  hero_badge: 'Who We Are',
+  hero_title: 'About UJADU Rural Discipleship Mission',
+  hero_tagline: 'Making Disciples, Transforming Lives Through Christ in rural communities.',
+
+  overview_badge: 'Ministry Overview',
+  overview_title: 'A Calling to Unreached Rural Frontiers',
+  overview_paragraph_1:
+    'UJADU Rural Discipleship Mission was established out of a deep burden for rural populations in underserved villages and agricultural settlements. While urban centers often enjoy vibrant church networks, rural communities frequently lack trained ministers, study Bibles, and systematic discipleship programs.',
+  overview_paragraph_2:
+    'Our conviction is grounded in the conviction that every human soul in the most distant hamlet is precious to God. We combine direct, compassionate Gospel proclamation with long-term, grounding discipleship that equips local believers to become pillar leaders in their families and communities.',
+  overview_image:
+    'https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?auto=format&fit=crop&w=1000&q=80',
+  overview_image_alt: 'Rural African village gathering listening to gospel',
+
+  mission_title: 'Our Mission',
+  mission_statement:
+    'To preach the uncompromised Gospel of Jesus Christ to rural populations, raise rooted disciples through systematic biblical instruction, and plant vibrant, self-sustaining local fellowship communities.',
+  vision_title: 'Our Vision',
+  vision_statement:
+    'To see vibrant, Christ-centered rural communities transformed by the power of the Holy Spirit, where every believer is equipped as a faithful disciple-maker.',
+
+  pillars_badge: 'Guiding Pillars',
+  pillars_title: 'Core Biblical Values',
+  pillars_subtext: 'The principles that anchor our field decisions, teaching curricula, and community engagement.',
+  pillars: [
+    {
+      id: 'pil-1',
+      title: 'Biblical Supreme Authority',
+      scripture_reference: '2 Timothy 3:16-17',
+      description: 'Anchored on Holy Scripture as our sole authority for life, salvation, and ministry practice.',
+    },
+    {
+      id: 'pil-2',
+      title: 'Unwavering Christ-Centered Discipleship',
+      scripture_reference: 'Matthew 28:19-20',
+      description: 'Nurturing believers to spiritual maturity through systematic personal study and life-on-life mentoring.',
+    },
+    {
+      id: 'pil-3',
+      title: 'Sacrificial Rural Servant Leadership',
+      scripture_reference: 'Mark 10:45',
+      description: 'Living alongside village communities with humble hearts, serving their spiritual and holistic needs.',
+    },
+    {
+      id: 'pil-4',
+      title: 'Holistic Community Transformation',
+      scripture_reference: 'James 2:15-17',
+      description: 'Reflecting the compassion of Christ through practical community blessing, relief, and empowerment.',
+    },
+    {
+      id: 'pil-5',
+      title: 'Faithful Stewardship & Integrity',
+      scripture_reference: '1 Corinthians 4:2',
+      description: 'Honoring God with unwavering accountability in all resources, missionary time, and relationships.',
+    },
+  ],
+
+  strategy_badge: 'Our Strategy',
+  strategy_title: 'Our 4-Phase Rural Discipleship Cycle',
+  strategy_phases: [
+    {
+      id: 'ph-1',
+      step_number: 1,
+      title: 'Frontier Outreach',
+      description: 'Conducting village door-to-door evangelism, film shows, and open-air gospel meetings in unreached areas.',
+    },
+    {
+      id: 'ph-2',
+      step_number: 2,
+      title: 'Grounding Believers',
+      description: 'Establishing weekly Bible study circles covering foundational doctrines, salvation, assurance, and prayer.',
+    },
+    {
+      id: 'ph-3',
+      step_number: 3,
+      title: 'Leadership Mentorship',
+      description: 'Training local elders, women leaders, and youth directors to lead prayer watches and study classes.',
+    },
+    {
+      id: 'ph-4',
+      step_number: 4,
+      title: 'Community Blessing',
+      description: 'Integrating clean water initiatives, health education, and agricultural support to reflect God\'s love.',
+    },
+  ],
+
+  leadership_badge: 'Servant Leadership',
+  leadership_title: 'Ministry Leadership & Field Team',
+  leadership_subtext: 'Dedicated servants laboring across rural field bases.',
+  leadership_team: [
+    {
+      id: 'lead-1',
+      name: 'Evangelist S. O. Okon',
+      role: 'Mission Director & Pioneer Evangelist',
+      bio: 'Over 20 years of dedicated rural field evangelism, church planting, and missionary training across underserved communities.',
+      initials: 'EO',
+      photo_url: '',
+    },
+    {
+      id: 'lead-2',
+      name: 'Pastor Emmanuel David',
+      role: 'Head of Discipleship & Curriculum',
+      bio: 'Passionate teacher of scripture focused on localized discipleship materials and training indigenous lay leaders.',
+      initials: 'ED',
+      photo_url: '',
+    },
+    {
+      id: 'lead-3',
+      name: 'Minister Grace Adebayo',
+      role: 'Intercession & Women Discipleship',
+      bio: 'Directing rural women’s prayer fellowships, community welfare initiatives, and youth mentoring.',
+      initials: 'GA',
+      photo_url: '',
+    },
+  ],
+
+  milestones_title: 'Field Milestones & Kingdom Impact',
+  milestones: [
+    { id: 'ms-1', value: '85+', label: 'Rural Villages Reached' },
+    { id: 'ms-2', value: '1,400+', label: 'Disciples Grounded' },
+    { id: 'ms-3', value: '3,200+', label: 'Study Bibles Distributed' },
+    { id: 'ms-4', value: '24', label: 'Local Fellowships Planted' },
+  ],
+
+  cta_heading: 'Ready to Walk with Us?',
+  cta_primary_label: 'Get Involved & Partner',
+  cta_primary_link: '/contact',
+  cta_secondary_label: 'Listen to Teachings',
+  cta_secondary_link: '/audio',
 };
 
 const DEFAULT_GALLERY: GalleryItem[] = [
@@ -439,6 +571,7 @@ const STORAGE_KEYS = {
   PAGES: 'ujadu_custom_pages',
   MESSAGES: 'ujadu_messages',
   SUBSCRIBERS: 'ujadu_subscribers',
+  ABOUT: 'ujadu_about_content',
 };
 
 const DEFAULT_SUBSCRIBERS: NewsletterSubscriber[] = [
@@ -502,6 +635,60 @@ export class DataService {
     }
 
     setStoredItem(STORAGE_KEYS.SETTINGS, updated);
+    return updated;
+  }
+
+  // --- ABOUT US CONTENT ---
+  static async getAboutContent(): Promise<AboutContent> {
+    if (isFirebaseConfigured) {
+      try {
+        const docRef = doc(db, 'site_settings', 'about');
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          const cloudData = snap.data() as Partial<AboutContent>;
+          return {
+            ...DEFAULT_ABOUT_CONTENT,
+            ...cloudData,
+            pillars: cloudData.pillars || DEFAULT_ABOUT_CONTENT.pillars,
+            strategy_phases: cloudData.strategy_phases || DEFAULT_ABOUT_CONTENT.strategy_phases,
+            leadership_team: cloudData.leadership_team || DEFAULT_ABOUT_CONTENT.leadership_team,
+            milestones: cloudData.milestones || DEFAULT_ABOUT_CONTENT.milestones,
+          };
+        }
+      } catch (err) {
+        handleFirestoreError(err, OperationType.GET, 'site_settings/about');
+      }
+    }
+    const local = getStoredItem<AboutContent>(STORAGE_KEYS.ABOUT, DEFAULT_ABOUT_CONTENT);
+    return {
+      ...DEFAULT_ABOUT_CONTENT,
+      ...local,
+      pillars: local.pillars || DEFAULT_ABOUT_CONTENT.pillars,
+      strategy_phases: local.strategy_phases || DEFAULT_ABOUT_CONTENT.strategy_phases,
+      leadership_team: local.leadership_team || DEFAULT_ABOUT_CONTENT.leadership_team,
+      milestones: local.milestones || DEFAULT_ABOUT_CONTENT.milestones,
+    };
+  }
+
+  static async updateAboutContent(content: Partial<AboutContent>): Promise<AboutContent> {
+    const current = await this.getAboutContent();
+    const updated: AboutContent = {
+      ...current,
+      ...content,
+      updated_at: new Date().toISOString(),
+    };
+
+    const sanitized = sanitizeForFirestore(updated);
+
+    if (isFirebaseConfigured) {
+      try {
+        await setDoc(doc(db, 'site_settings', 'about'), sanitized, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, 'site_settings/about');
+      }
+    }
+
+    setStoredItem(STORAGE_KEYS.ABOUT, updated);
     return updated;
   }
 

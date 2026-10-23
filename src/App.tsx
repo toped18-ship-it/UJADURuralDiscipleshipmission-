@@ -6,6 +6,7 @@ import { Navbar } from './components/Navbar';
 import { AudioProvider } from './context/AudioContext';
 import { AuthProvider } from './context/AuthContext';
 import { AboutPage } from './pages/AboutPage';
+import { AdminAboutPage } from './pages/admin/AdminAboutPage';
 import { AdminAudioPage } from './pages/admin/AdminAudioPage';
 import { AdminBlogPage } from './pages/admin/AdminBlogPage';
 import { AdminDashboardLayout } from './pages/admin/AdminDashboardLayout';
@@ -120,6 +121,7 @@ export default function App() {
             <Route path="/admin" element={<AdminDashboardLayout />}>
               <Route index element={<AdminOverviewPage />} />
               <Route path="dashboard" element={<AdminOverviewPage />} />
+              <Route path="about" element={<AdminAboutPage />} />
               <Route path="pages" element={<AdminPagesPage />} />
               <Route path="gallery" element={<AdminGalleryPage />} />
               <Route path="audio" element={<AdminAudioPage />} />

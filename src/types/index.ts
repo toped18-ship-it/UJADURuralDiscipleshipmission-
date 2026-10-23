@@ -143,3 +143,84 @@ export interface AdminStats {
   totalSubscribers: number;
   customPages?: number;
 }
+
+export interface LeadershipMember {
+  id: string;
+  name: string;
+  role: string;
+  bio: string;
+  photo_url?: string;
+  initials?: string;
+}
+
+export interface CorePillar {
+  id: string;
+  title: string;
+  scripture_reference?: string;
+  description: string;
+}
+
+export interface DiscipleshipCyclePhase {
+  id: string;
+  step_number: number;
+  title: string;
+  description: string;
+}
+
+export interface AboutMilestoneStat {
+  id: string;
+  value: string;
+  label: string;
+}
+
+export interface AboutContent {
+  // Hero Section
+  hero_badge: string;
+  hero_title: string;
+  hero_tagline: string;
+
+  // Overview / Calling Section
+  overview_badge: string;
+  overview_title: string;
+  overview_paragraph_1: string;
+  overview_paragraph_2: string;
+  overview_image: string;
+  overview_image_alt: string;
+
+  // Mission & Vision
+  mission_title: string;
+  mission_statement: string;
+  vision_title: string;
+  vision_statement: string;
+
+  // Core Pillars / Biblical Values
+  pillars_badge: string;
+  pillars_title: string;
+  pillars_subtext: string;
+  pillars: CorePillar[];
+
+  // 4-Phase Discipleship Cycle / Strategy
+  strategy_badge: string;
+  strategy_title: string;
+  strategy_phases: DiscipleshipCyclePhase[];
+
+  // Leadership Team
+  leadership_badge: string;
+  leadership_title: string;
+  leadership_subtext: string;
+  leadership_team: LeadershipMember[];
+
+  // Milestones / Stats (impact counters)
+  milestones_title?: string;
+  milestones: AboutMilestoneStat[];
+
+  // Call to Action
+  cta_heading: string;
+  cta_primary_label: string;
+  cta_primary_link: string;
+  cta_secondary_label: string;
+  cta_secondary_link: string;
+
+  updated_at?: string;
+}
+

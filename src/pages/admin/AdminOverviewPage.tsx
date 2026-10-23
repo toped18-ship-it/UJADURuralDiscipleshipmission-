@@ -33,9 +33,25 @@ export const AdminOverviewPage: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-serif font-bold text-slate-900">Dashboard Overview</h1>
-        <p className="text-xs text-slate-500">Real-time statistics derived from your database and content records.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-serif font-bold text-slate-900">Dashboard Overview</h1>
+          <p className="text-xs text-slate-500">Real-time statistics derived from your database and content records.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/admin/about"
+            className="px-3.5 py-2 rounded-lg bg-amber-400 text-emerald-950 font-bold text-xs shadow-sm hover:bg-amber-300 transition-colors flex items-center gap-1.5"
+          >
+            <span>📖</span> Edit About Us Page
+          </Link>
+          <Link
+            to="/admin/pages"
+            className="px-3.5 py-2 rounded-lg bg-[#0f2a1d] text-white font-bold text-xs shadow-sm hover:bg-emerald-900 transition-colors flex items-center gap-1.5"
+          >
+            <span>📄</span> Manage Pages
+          </Link>
+        </div>
       </div>
 
       {isLoading ? (
