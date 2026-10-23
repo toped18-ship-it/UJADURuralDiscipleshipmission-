@@ -108,37 +108,50 @@ Write your discipleship message or mission report here...
     setIsModalOpen(true);
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent, overrideStatus?: 'draft' | 'published') => {
     e.preventDefault();
-    if (!formData.title || !formData.content) {
-      alert('Please enter a title and content for the article.');
+    if (!formData.title.trim() || !formData.content.trim()) {
+      alert('Please enter both a title and body content for the article.');
       return;
     }
 
     setIsSaving(true);
+    const targetStatus = overrideStatus || formData.status;
     const tags = formData.tagsStr
       .split(',')
       .map((t) => t.trim())
       .filter(Boolean);
 
-    await DataService.saveBlogPost({
-      id: editingItem?.id,
-      title: formData.title,
-      slug: formData.slug || formData.title.toLowerCase().replace(/\s+/g, '-'),
-      excerpt: formData.excerpt,
-      content: formData.content,
-      category: formData.category,
-      tags,
-      author_name: formData.author_name,
-      featured_image_path: formData.featured_image_path,
-      status: formData.status,
-    });
+    try {
+      await DataService.saveBlogPost({
+        id: editingItem?.id,
+        title: formData.title.trim(),
+        slug: formData.slug || formData.title.toLowerCase().replace(/\s+/g, '-'),
+        excerpt: formData.excerpt,
+        content: formData.content,
+        category: formData.category,
+        tags,
+        author_name: formData.author_name,
+        featured_image_path: formData.featured_image_path,
+        status: targetStatus,
+      });
 
-    setIsSaving(false);
-    setIsModalOpen(false);
-    setMessage(editingItem ? 'Blog post updated!' : 'Blog post saved!');
-    setTimeout(() => setMessage(null), 3000);
-    loadBlogs();
+      setIsModalOpen(false);
+      setMessage(
+        editingItem
+          ? 'Blog post successfully updated!'
+          : targetStatus === 'published'
+          ? 'Blog post successfully published to live website!'
+          : 'Blog draft saved successfully!'
+      );
+      setTimeout(() => setMessage(null), 4000);
+      await loadBlogs();
+    } catch (err) {
+      console.error('Error saving blog post:', err);
+      alert('Failed to save blog post. Please verify fields and try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -388,7 +401,7 @@ Write your discipleship message or mission report here...
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t">
                   <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
@@ -396,13 +409,25 @@ Write your discipleship message or mission report here...
                   >
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    disabled={isSaving}
-                    className="px-5 py-2 text-xs font-bold text-amber-300 bg-[#1b4332] rounded-lg hover:bg-emerald-800"
-                  >
-                    {isSaving ? 'Saving...' : 'Save Blog Post'}
-                  </button>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={(e) => handleSave(e, 'draft')}
+                      className="px-4 py-2 text-xs font-bold text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50"
+                    >
+                      {isSaving ? 'Saving...' : '💾 Save as Draft'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={(e) => handleSave(e, 'published')}
+                      className="px-5 py-2 text-xs font-bold text-amber-300 bg-[#1b4332] rounded-lg hover:bg-emerald-800 transition-colors shadow disabled:opacity-50"
+                    >
+                      {isSaving ? 'Publishing...' : '🚀 Save & Publish Live'}
+                    </button>
+                  </div>
                 </div>
               </form>
             )}

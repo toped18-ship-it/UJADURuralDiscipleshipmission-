@@ -586,7 +586,7 @@ const DEFAULT_SUBSCRIBERS: NewsletterSubscriber[] = [
 function getStoredItem<T>(key: string, defaultValue: T): T {
   try {
     const item = localStorage.getItem(key);
-    if (!item) {
+    if (item === null) {
       localStorage.setItem(key, JSON.stringify(defaultValue));
       return defaultValue;
     }
@@ -601,6 +601,41 @@ function setStoredItem<T>(key: string, value: T): void {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (err) {
     console.warn(`Local storage cache warning for ${key}:`, err);
+  }
+}
+
+const SEED_KEY = 'ujadu_data_seeded_v2';
+
+async function ensureSeedStatus(): Promise<boolean> {
+  try {
+    if (localStorage.getItem(SEED_KEY) === 'true') {
+      return true;
+    }
+  } catch {}
+
+  if (isFirebaseConfigured) {
+    try {
+      const snap = await getDoc(doc(db, 'site_settings', 'seed_status'));
+      if (snap.exists() && snap.data()?.seeded) {
+        try {
+          localStorage.setItem(SEED_KEY, 'true');
+        } catch {}
+        return true;
+      }
+    } catch {}
+  }
+
+  return false;
+}
+
+async function markSeeded(): Promise<void> {
+  try {
+    localStorage.setItem(SEED_KEY, 'true');
+  } catch {}
+  if (isFirebaseConfigured) {
+    try {
+      await setDoc(doc(db, 'site_settings', 'seed_status'), { seeded: true, timestamp: new Date().toISOString() }, { merge: true });
+    } catch {}
   }
 }
 
@@ -694,33 +729,39 @@ export class DataService {
 
   // --- GALLERY IMAGES ---
   static async getGalleryImages(category?: string, includeUnpublished = false): Promise<GalleryItem[]> {
+    const isSeeded = await ensureSeedStatus();
+    let cloudItems: GalleryItem[] | null = null;
+
     if (isFirebaseConfigured) {
       try {
         const colRef = collection(db, 'gallery_images');
         const snap = await getDocs(colRef);
         if (!snap.empty) {
-          let items: GalleryItem[] = snap.docs.map((d) => d.data() as GalleryItem);
-          if (!includeUnpublished) items = items.filter((i) => i.published);
-          if (category && category !== 'All') items = items.filter((i) => i.category === category);
-          return items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        } else {
+          cloudItems = snap.docs.map((d) => d.data() as GalleryItem);
+          await markSeeded();
+        } else if (!isSeeded) {
           // Bootstrap default gallery images to cloud Firestore on initial boot
           for (const item of DEFAULT_GALLERY) {
-            await setDoc(doc(db, 'gallery_images', item.id), item).catch(() => {});
+            await setDoc(doc(db, 'gallery_images', item.id), sanitizeForFirestore(item)).catch(() => {});
           }
+          cloudItems = DEFAULT_GALLERY;
+          await markSeeded();
+        } else {
+          cloudItems = [];
         }
       } catch (err) {
         handleFirestoreError(err, OperationType.LIST, 'gallery_images');
       }
     }
 
-    let items = getStoredItem<GalleryItem[]>(STORAGE_KEYS.GALLERY, DEFAULT_GALLERY);
+    let items = cloudItems !== null ? cloudItems : getStoredItem<GalleryItem[]>(STORAGE_KEYS.GALLERY, isSeeded ? [] : DEFAULT_GALLERY);
     if (!includeUnpublished) items = items.filter((i) => i.published);
     if (category && category !== 'All') items = items.filter((i) => i.category === category);
     return items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
   static async saveGalleryImage(item: Partial<GalleryItem>): Promise<GalleryItem> {
+    await markSeeded();
     const now = new Date().toISOString();
     let savedItem: GalleryItem;
 
@@ -747,15 +788,17 @@ export class DataService {
       };
     }
 
+    const sanitized = sanitizeForFirestore(savedItem);
+
     if (isFirebaseConfigured) {
       try {
-        await setDoc(doc(db, 'gallery_images', savedItem.id), savedItem, { merge: true });
+        await setDoc(doc(db, 'gallery_images', savedItem.id), sanitized, { merge: true });
       } catch (err) {
         handleFirestoreError(err, OperationType.WRITE, `gallery_images/${savedItem.id}`);
       }
     }
 
-    const currentItems = getStoredItem<GalleryItem[]>(STORAGE_KEYS.GALLERY, DEFAULT_GALLERY);
+    const currentItems = getStoredItem<GalleryItem[]>(STORAGE_KEYS.GALLERY, []);
     const existingIndex = currentItems.findIndex((i) => i.id === savedItem.id);
     if (existingIndex >= 0) {
       currentItems[existingIndex] = savedItem;
@@ -767,6 +810,7 @@ export class DataService {
   }
 
   static async deleteGalleryImage(id: string): Promise<boolean> {
+    await markSeeded();
     if (isFirebaseConfigured) {
       try {
         await deleteDoc(doc(db, 'gallery_images', id));
@@ -775,7 +819,7 @@ export class DataService {
       }
     }
 
-    const currentItems = getStoredItem<GalleryItem[]>(STORAGE_KEYS.GALLERY, DEFAULT_GALLERY);
+    const currentItems = getStoredItem<GalleryItem[]>(STORAGE_KEYS.GALLERY, []);
     const filtered = currentItems.filter((i) => i.id !== id);
     setStoredItem(STORAGE_KEYS.GALLERY, filtered);
     return true;
@@ -893,6 +937,7 @@ export class DataService {
 
   // --- AUDIO TEACHINGS ---
   static async getAudioTeachings(category?: string, includeUnpublished = false): Promise<AudioTeaching[]> {
+    const isSeeded = await ensureSeedStatus();
     let cloudItems: AudioTeaching[] | null = null;
 
     if (isFirebaseConfigured) {
@@ -901,18 +946,23 @@ export class DataService {
         const snap = await getDocs(colRef);
         if (!snap.empty) {
           cloudItems = snap.docs.map((d) => d.data() as AudioTeaching);
-        } else {
-          // Bootstrap default audio recordings into cloud Firestore
+          await markSeeded();
+        } else if (!isSeeded) {
+          // Bootstrap default audio recordings into cloud Firestore on initial boot
           for (const item of DEFAULT_AUDIO) {
-            await setDoc(doc(db, 'audio_teachings', item.id), item).catch(() => {});
+            await setDoc(doc(db, 'audio_teachings', item.id), sanitizeForFirestore(item)).catch(() => {});
           }
+          cloudItems = DEFAULT_AUDIO;
+          await markSeeded();
+        } else {
+          cloudItems = [];
         }
       } catch (err) {
         handleFirestoreError(err, OperationType.LIST, 'audio_teachings');
       }
     }
 
-    const items = cloudItems || getStoredItem<AudioTeaching[]>(STORAGE_KEYS.AUDIO, DEFAULT_AUDIO);
+    const items = cloudItems !== null ? cloudItems : getStoredItem<AudioTeaching[]>(STORAGE_KEYS.AUDIO, isSeeded ? [] : DEFAULT_AUDIO);
 
     const resolvedItems = await Promise.all(
       items.map(async (item) => {
@@ -947,6 +997,7 @@ export class DataService {
   }
 
   static async saveAudioTeaching(item: Partial<AudioTeaching>): Promise<AudioTeaching> {
+    await markSeeded();
     const now = new Date().toISOString();
     let persistentAudioPath = item.audio_storage_path || SAMPLE_AUDIO_URL;
     let fileId = item.audio_file_id;
@@ -991,16 +1042,18 @@ export class DataService {
       };
     }
 
+    const sanitized = sanitizeForFirestore(saved);
+
     // Publish to cloud Firestore
     if (isFirebaseConfigured) {
       try {
-        await setDoc(doc(db, 'audio_teachings', saved.id), saved, { merge: true });
+        await setDoc(doc(db, 'audio_teachings', saved.id), sanitized, { merge: true });
       } catch (err) {
         handleFirestoreError(err, OperationType.WRITE, `audio_teachings/${saved.id}`);
       }
     }
 
-    const current = getStoredItem<AudioTeaching[]>(STORAGE_KEYS.AUDIO, DEFAULT_AUDIO);
+    const current = getStoredItem<AudioTeaching[]>(STORAGE_KEYS.AUDIO, []);
     const idx = current.findIndex((a) => a.id === saved.id);
     if (idx >= 0) {
       current[idx] = saved;
@@ -1021,6 +1074,7 @@ export class DataService {
   }
 
   static async deleteAudioTeaching(id: string): Promise<boolean> {
+    await markSeeded();
     if (isFirebaseConfigured) {
       try {
         await deleteDoc(doc(db, 'audio_teachings', id));
@@ -1029,7 +1083,7 @@ export class DataService {
       }
     }
 
-    const current = getStoredItem<AudioTeaching[]>(STORAGE_KEYS.AUDIO, DEFAULT_AUDIO);
+    const current = getStoredItem<AudioTeaching[]>(STORAGE_KEYS.AUDIO, []);
     const itemToDelete = current.find((a) => a.id === id);
     if (itemToDelete) {
       const fileId =
@@ -1048,6 +1102,7 @@ export class DataService {
 
   // --- BLOG POSTS ---
   static async getBlogPosts(category?: string, includeDrafts = false): Promise<BlogPost[]> {
+    const isSeeded = await ensureSeedStatus();
     let cloudBlogs: BlogPost[] | null = null;
 
     if (isFirebaseConfigured) {
@@ -1056,17 +1111,22 @@ export class DataService {
         const snap = await getDocs(colRef);
         if (!snap.empty) {
           cloudBlogs = snap.docs.map((d) => d.data() as BlogPost);
-        } else {
+          await markSeeded();
+        } else if (!isSeeded) {
           for (const item of DEFAULT_BLOGS) {
-            await setDoc(doc(db, 'blog_posts', item.id), item).catch(() => {});
+            await setDoc(doc(db, 'blog_posts', item.id), sanitizeForFirestore(item)).catch(() => {});
           }
+          cloudBlogs = DEFAULT_BLOGS;
+          await markSeeded();
+        } else {
+          cloudBlogs = [];
         }
       } catch (err) {
         handleFirestoreError(err, OperationType.LIST, 'blog_posts');
       }
     }
 
-    let items = cloudBlogs || getStoredItem<BlogPost[]>(STORAGE_KEYS.BLOGS, DEFAULT_BLOGS);
+    let items = cloudBlogs !== null ? cloudBlogs : getStoredItem<BlogPost[]>(STORAGE_KEYS.BLOGS, isSeeded ? [] : DEFAULT_BLOGS);
     if (!includeDrafts) items = items.filter((b) => b.status === 'published');
     if (category && category !== 'All') items = items.filter((b) => b.category === category);
     return items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -1078,6 +1138,7 @@ export class DataService {
   }
 
   static async saveBlogPost(item: Partial<BlogPost>): Promise<BlogPost> {
+    await markSeeded();
     const now = new Date().toISOString();
     const generateSlug = (title: string) =>
       title
@@ -1086,43 +1147,67 @@ export class DataService {
         .trim()
         .replace(/\s+/g, '-');
 
-    let saved: BlogPost;
-    if (item.id) {
-      saved = {
-        ...item,
-        slug: item.slug || (item.title ? generateSlug(item.title) : `post-${Date.now()}`),
-        updated_at: now,
-      } as BlogPost;
-    } else {
-      const slug = item.slug || (item.title ? generateSlug(item.title) : `post-${Date.now()}`);
-      saved = {
-        id: `blog-${Date.now()}`,
-        title: item.title || 'Untitled Blog Post',
-        slug,
-        excerpt: item.excerpt || 'Brief excerpt describing this blog article...',
-        content: item.content || 'Content for this blog post goes here...',
-        featured_image_path:
-          item.featured_image_path ||
-          'https://images.unsplash.com/photo-1509099836639-18ba1795216d?auto=format&fit=crop&w=1200&q=80',
-        author_name: item.author_name || 'UJADU Discipleship Team',
-        category: item.category || 'Discipleship',
-        tags: item.tags || ['Discipleship', 'Evangelism'],
-        status: item.status || 'draft',
-        published_at: item.status === 'published' ? item.published_at || now : undefined,
-        created_at: now,
-        updated_at: now,
-      };
+    const current = getStoredItem<BlogPost[]>(STORAGE_KEYS.BLOGS, []);
+    const existing = item.id ? current.find((b) => b.id === item.id) : null;
+
+    const title = (item.title || existing?.title || 'Untitled Blog Post').trim();
+    const slug = (item.slug || existing?.slug || generateSlug(title) || `post-${Date.now()}`)
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-');
+    const excerpt = (item.excerpt || existing?.excerpt || 'Brief excerpt describing this blog article...').trim();
+    const content = (item.content || existing?.content || 'Content for this blog post goes here...').trim();
+    const featured_image_path =
+      item.featured_image_path ||
+      existing?.featured_image_path ||
+      'https://images.unsplash.com/photo-1509099836639-18ba1795216d?auto=format&fit=crop&w=1200&q=80';
+    const author_name = (item.author_name || existing?.author_name || 'UJADU Discipleship Team').trim();
+    const category = item.category || existing?.category || 'Discipleship';
+    const tags = item.tags && item.tags.length > 0 ? item.tags : existing?.tags || ['Discipleship', 'Evangelism'];
+    const status: 'draft' | 'published' = item.status || existing?.status || 'draft';
+
+    const publishedAt =
+      status === 'published'
+        ? item.published_at || existing?.published_at || now
+        : existing?.published_at || '';
+
+    const saved: BlogPost = {
+      id: item.id || existing?.id || `blog-${Date.now()}`,
+      title,
+      slug,
+      excerpt,
+      content,
+      featured_image_path,
+      author_name,
+      category,
+      tags,
+      status,
+      created_at: item.created_at || existing?.created_at || now,
+      updated_at: now,
+    };
+
+    if (publishedAt) {
+      saved.published_at = publishedAt;
     }
+
+    if (item.author_id || existing?.author_id) {
+      saved.author_id = item.author_id || existing?.author_id;
+    }
+
+    const sanitized = sanitizeForFirestore(saved);
 
     if (isFirebaseConfigured) {
       try {
-        await setDoc(doc(db, 'blog_posts', saved.id), saved, { merge: true });
+        await setDoc(doc(db, 'blog_posts', saved.id), sanitized, { merge: true });
+        console.log(`Blog article "${saved.title}" successfully saved & published to Cloud Firestore.`);
       } catch (err) {
+        console.error('Firestore saveBlogPost error:', err);
         handleFirestoreError(err, OperationType.WRITE, `blog_posts/${saved.id}`);
+        throw err;
       }
     }
 
-    const current = getStoredItem<BlogPost[]>(STORAGE_KEYS.BLOGS, DEFAULT_BLOGS);
     const idx = current.findIndex((b) => b.id === saved.id);
     if (idx >= 0) {
       current[idx] = saved;
@@ -1134,6 +1219,7 @@ export class DataService {
   }
 
   static async deleteBlogPost(id: string): Promise<boolean> {
+    await markSeeded();
     if (isFirebaseConfigured) {
       try {
         await deleteDoc(doc(db, 'blog_posts', id));
@@ -1142,7 +1228,7 @@ export class DataService {
       }
     }
 
-    const current = getStoredItem<BlogPost[]>(STORAGE_KEYS.BLOGS, DEFAULT_BLOGS);
+    const current = getStoredItem<BlogPost[]>(STORAGE_KEYS.BLOGS, []);
     const filtered = current.filter((b) => b.id !== id);
     setStoredItem(STORAGE_KEYS.BLOGS, filtered);
     return true;
@@ -1264,6 +1350,7 @@ export class DataService {
   // --- CUSTOM PAGES (HEADINGS, CONTENTS, GALLERY, SLIDES, AUDIO) ---
   // SAVES DIRECTLY TO CLOUD FIRESTORE FOR INSTANT PUBLIC PUBLISHING
   static async getCustomPages(includeUnpublished = false): Promise<CustomPage[]> {
+    const isSeeded = await ensureSeedStatus();
     let cloudPages: CustomPage[] | null = null;
 
     if (isFirebaseConfigured) {
@@ -1272,18 +1359,23 @@ export class DataService {
         const snap = await getDocs(colRef);
         if (!snap.empty) {
           cloudPages = snap.docs.map((d) => d.data() as CustomPage);
-        } else {
+          await markSeeded();
+        } else if (!isSeeded) {
           // Bootstrap default custom page into cloud Firestore so website has initial data
           for (const page of DEFAULT_CUSTOM_PAGES) {
-            await setDoc(doc(db, 'custom_pages', page.id), page).catch(() => {});
+            await setDoc(doc(db, 'custom_pages', page.id), sanitizeForFirestore(page)).catch(() => {});
           }
+          cloudPages = DEFAULT_CUSTOM_PAGES;
+          await markSeeded();
+        } else {
+          cloudPages = [];
         }
       } catch (err) {
         handleFirestoreError(err, OperationType.LIST, 'custom_pages');
       }
     }
 
-    const items = cloudPages || getStoredItem<CustomPage[]>(STORAGE_KEYS.PAGES, DEFAULT_CUSTOM_PAGES);
+    const items = cloudPages !== null ? cloudPages : getStoredItem<CustomPage[]>(STORAGE_KEYS.PAGES, isSeeded ? [] : DEFAULT_CUSTOM_PAGES);
 
     // Resolve any IndexedDB audio references to live object URLs if present
     const resolvedItems = await Promise.all(
@@ -1315,6 +1407,7 @@ export class DataService {
   }
 
   static async saveCustomPage(page: Partial<CustomPage>): Promise<CustomPage> {
+    await markSeeded();
     const now = new Date().toISOString();
 
     let persistentAudioPath = page.audio_storage_path || '';
@@ -1335,7 +1428,7 @@ export class DataService {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
 
-    const current = getStoredItem<CustomPage[]>(STORAGE_KEYS.PAGES, DEFAULT_CUSTOM_PAGES);
+    const current = getStoredItem<CustomPage[]>(STORAGE_KEYS.PAGES, []);
     const existing = page.id ? current.find((p) => p.id === page.id) : null;
     const createdAt = page.created_at || existing?.created_at || now;
 
@@ -1407,6 +1500,7 @@ export class DataService {
   }
 
   static async deleteCustomPage(id: string): Promise<boolean> {
+    await markSeeded();
     // Delete from Cloud Firestore
     if (isFirebaseConfigured) {
       try {
@@ -1416,7 +1510,7 @@ export class DataService {
       }
     }
 
-    const current = getStoredItem<CustomPage[]>(STORAGE_KEYS.PAGES, DEFAULT_CUSTOM_PAGES);
+    const current = getStoredItem<CustomPage[]>(STORAGE_KEYS.PAGES, []);
     const itemToDelete = current.find((p) => p.id === id);
     if (itemToDelete) {
       const fileId =
