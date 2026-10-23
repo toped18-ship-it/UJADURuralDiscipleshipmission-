@@ -1,0 +1,6 @@
+{
+  "name": "UJADU Rural Discipleship Mission",
+  "description": "Making Disciples, Transforming Lives Through Christ in rural communities. Official portal for audio teachings, outreach gallery, blog, and ministry partnerships.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
