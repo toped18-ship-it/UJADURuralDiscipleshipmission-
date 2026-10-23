@@ -147,19 +147,28 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const downloadAudio = async (track: AudioTeaching) => {
+    const filename = `${(track.title || 'teaching').toLowerCase().replace(/[^a-z0-9]/g, '-')}.mp3`;
     try {
+      if (track.audio_storage_path.startsWith('data:') || track.audio_storage_path.startsWith('blob:')) {
+        const a = document.createElement('a');
+        a.href = track.audio_storage_path;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        return;
+      }
       const response = await fetch(track.audio_storage_path);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${track.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}.mp3`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
     } catch {
-      // Direct window open fallback for CORS or direct files
       window.open(track.audio_storage_path, '_blank');
     }
   };

@@ -443,6 +443,108 @@ export class DataService {
     return true;
   }
 
+  // --- FILE UPLOAD HELPERS ---
+  static async uploadAudioFile(file: File): Promise<{ url: string; duration: number; fileName: string; fileSize: string }> {
+    const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
+    const fileSizeStr = file.size >= 1024 * 1024 ? `${sizeInMB} MB` : `${Math.round(file.size / 1024)} KB`;
+
+    // Calculate duration from audio metadata
+    const getDuration = (f: File): Promise<number> => {
+      return new Promise((resolve) => {
+        try {
+          const objectUrl = URL.createObjectURL(f);
+          const tempAudio = new Audio();
+          tempAudio.src = objectUrl;
+          tempAudio.onloadedmetadata = () => {
+            const dur = Math.round(tempAudio.duration);
+            URL.revokeObjectURL(objectUrl);
+            resolve(isNaN(dur) ? 1800 : dur);
+          };
+          tempAudio.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            resolve(1800);
+          };
+        } catch {
+          resolve(1800);
+        }
+      });
+    };
+
+    const duration = await getDuration(file);
+
+    // If Supabase Storage is configured, upload to audio-teachings bucket
+    if (isSupabaseConfigured) {
+      try {
+        const fileExt = file.name.split('.').pop() || 'mp3';
+        const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const filePath = `sermons/${Date.now()}_${cleanName}`;
+        const { error: uploadError } = await supabase.storage
+          .from('audio-teachings')
+          .upload(filePath, file, { contentType: file.type || 'audio/mpeg', upsert: true });
+
+        if (!uploadError) {
+          const { data: publicUrlData } = supabase.storage
+            .from('audio-teachings')
+            .getPublicUrl(filePath);
+          if (publicUrlData?.publicUrl) {
+            return {
+              url: publicUrlData.publicUrl,
+              duration,
+              fileName: file.name,
+              fileSize: fileSizeStr,
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('Supabase storage upload error, falling back:', err);
+      }
+    }
+
+    // High fidelity browser fallback: Base64 Data URL
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        resolve({
+          url: reader.result as string,
+          duration,
+          fileName: file.name,
+          fileSize: fileSizeStr,
+        });
+      };
+      reader.onerror = () => reject(new Error('Failed to read audio file'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  static async uploadImageFile(file: File, bucket = 'branding-assets'): Promise<string> {
+    if (isSupabaseConfigured) {
+      try {
+        const fileExt = file.name.split('.').pop() || 'jpg';
+        const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const filePath = `covers/${Date.now()}_${cleanName}`;
+        const { error: uploadError } = await supabase.storage
+          .from(bucket)
+          .upload(filePath, file, { contentType: file.type || 'image/jpeg', upsert: true });
+
+        if (!uploadError) {
+          const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(filePath);
+          if (publicUrlData?.publicUrl) {
+            return publicUrlData.publicUrl;
+          }
+        }
+      } catch (err) {
+        console.warn('Image upload fallback:', err);
+      }
+    }
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('Failed to read image file'));
+      reader.readAsDataURL(file);
+    });
+  }
+
   // --- AUDIO TEACHINGS ---
   static async getAudioTeachings(category?: string, includeUnpublished = false): Promise<AudioTeaching[]> {
     if (isSupabaseConfigured) {
