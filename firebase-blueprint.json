@@ -1,0 +1,105 @@
+{
+  "entities": {
+    "profiles": {
+      "title": "User Profiles",
+      "description": "User account profiles with admin role access control",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "display_name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["member", "admin"] },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "display_name", "email", "role"]
+    },
+    "site_settings": {
+      "title": "Site Settings",
+      "description": "Global ministry branding and configuration settings",
+      "type": "object",
+      "properties": {
+        "key": { "type": "string" },
+        "value": { "type": "object" },
+        "updated_at": { "type": "string" }
+      },
+      "required": ["key", "value"]
+    },
+    "gallery_images": {
+      "title": "Gallery Images",
+      "description": "Rural mission gallery photos and captions",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "storage_path": { "type": "string" },
+        "published": { "type": "boolean" },
+        "event_date": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["title", "category", "storage_path", "published"]
+    },
+    "audio_teachings": {
+      "title": "Audio Teachings",
+      "description": "Christian audio sermons and preachings",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "speaker": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "scripture_reference": { "type": "string" },
+        "audio_storage_path": { "type": "string" },
+        "cover_storage_path": { "type": "string" },
+        "duration_seconds": { "type": "number" },
+        "published": { "type": "boolean" },
+        "published_at": { "type": "string" }
+      },
+      "required": ["title", "speaker", "audio_storage_path", "published"]
+    },
+    "blog_posts": {
+      "title": "Blog Posts",
+      "description": "Ministry blog articles and reports",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "slug": { "type": "string" },
+        "excerpt": { "type": "string" },
+        "content": { "type": "string" },
+        "featured_image_path": { "type": "string" },
+        "author_name": { "type": "string" },
+        "category": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["draft", "published"] },
+        "created_at": { "type": "string" }
+      },
+      "required": ["title", "slug", "content", "status"]
+    },
+    "subscribers": {
+      "title": "Newsletter Subscribers",
+      "description": "Email subscribers for ministry newsletter",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "subscribed_at": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["email", "subscribed_at"]
+    },
+    "messages": {
+      "title": "Contact Messages",
+      "description": "Inquiries and prayer requests",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "partnership_type": { "type": "string" },
+        "message": { "type": "string" },
+        "created_at": { "type": "string" },
+        "read": { "type": "boolean" }
+      },
+      "required": ["name", "email", "message", "created_at"]
+    }
+  }
+}
