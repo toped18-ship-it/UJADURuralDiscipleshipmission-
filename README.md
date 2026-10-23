@@ -84,12 +84,28 @@ Note: In local/preview mode without environment variables, the system includes a
 
 ## 📦 Vercel Deployment Steps
 
-1. Push your code to GitHub.
-2. Import the repository into **Vercel**.
-3. In Vercel Project Settings -> **Environment Variables**, configure:
+1. **SPA Rewrites (`vercel.json`)**:
+   Ensure `vercel.json` is committed to the repository root. This tells Vercel to route all paths (like `/admin`, `/admin/login`, `/gallery`, `/audio`) through `/index.html`:
+   ```json
+   {
+     "rewrites": [
+       {
+         "source": "/(.*)",
+         "destination": "/index.html"
+       }
+     ]
+   }
+   ```
+2. **Push your code to GitHub**:
+   Commit and push all files (including `vercel.json` and `public/`).
+3. **Import into Vercel**:
+   Import your repository into **Vercel** with the default Vite settings (`Output Directory: dist`).
+4. **Environment Variables**:
+   In Vercel Project Settings -> **Environment Variables**, configure:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_PUBLISHABLE_KEY`
-4. Click **Deploy**. Vercel will automatically build the Vite production bundle.
+5. **Redeploy**:
+   Trigger a new deployment on Vercel. Now navigating directly to `https://<your-app>.vercel.app/admin` or `https://<your-app>.vercel.app/admin/login` will load seamlessly.
 
 ---
 
