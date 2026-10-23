@@ -45,6 +45,12 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
+    // Custom Pages Collection
+    match /custom_pages/{document=**} {
+      allow read: if resource.data.published == true || isAdmin();
+      allow write: if isAdmin();
+    }
+
     // Contact Messages
     match /messages/{document=**} {
       allow create: if true;

@@ -39,33 +39,39 @@ export const AdminOverviewPage: React.FC = () => {
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 animate-pulse">
-          {[1, 2, 3, 4, 5].map((n) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 animate-pulse">
+          {[1, 2, 3, 4, 5, 6].map((n) => (
             <div key={n} className="h-28 bg-slate-200 rounded-xl" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+          <Link to="/admin/pages" className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-1 hover:border-amber-400 transition-colors">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase">Pages</span>
+            <span className="text-2xl font-bold font-mono text-[#1b4332] block">{stats?.customPages || 0}</span>
+            <p className="text-[10px] text-amber-700 font-semibold">Custom builder ↗</p>
+          </Link>
+
+          <Link to="/admin/blog" className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-1 hover:border-amber-400 transition-colors">
             <span className="text-[11px] font-semibold text-slate-500 uppercase">Articles</span>
             <div className="flex items-baseline justify-between">
               <span className="text-2xl font-bold font-mono text-[#1b4332]">{stats?.publishedBlogs || 0}</span>
               <span className="text-[10px] text-amber-600 font-semibold">{stats?.draftBlogs || 0} Drafts</span>
             </div>
             <p className="text-[10px] text-slate-400">Live blog articles</p>
-          </div>
+          </Link>
 
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-1">
+          <Link to="/admin/gallery" className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-1 hover:border-amber-400 transition-colors">
             <span className="text-[11px] font-semibold text-slate-500 uppercase">Gallery</span>
             <span className="text-2xl font-bold font-mono text-[#1b4332] block">{stats?.publishedGallery || 0}</span>
             <p className="text-[10px] text-slate-400">Published photos</p>
-          </div>
+          </Link>
 
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-1">
+          <Link to="/admin/audio" className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-1 hover:border-amber-400 transition-colors">
             <span className="text-[11px] font-semibold text-slate-500 uppercase">Audio</span>
             <span className="text-2xl font-bold font-mono text-[#1b4332] block">{stats?.publishedAudio || 0}</span>
             <p className="text-[10px] text-slate-400">Preaching MP3s</p>
-          </div>
+          </Link>
 
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-1">
             <span className="text-[11px] font-semibold text-slate-500 uppercase">Inquiries</span>

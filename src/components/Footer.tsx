@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { DataService } from '../services/dataService';
-import { SiteSettings } from '../types';
+import { CustomPage, SiteSettings } from '../types';
 import { NewsletterSignup } from './NewsletterSignup';
 
 export const Footer: React.FC = () => {
   const [settings, setSettings] = useState<SiteSettings | null>(null);
+  const [customPages, setCustomPages] = useState<CustomPage[]>([]);
 
   useEffect(() => {
     DataService.getSiteSettings().then(setSettings);
+    DataService.getCustomPages().then(setCustomPages);
   }, []);
 
   return (
@@ -60,6 +62,13 @@ export const Footer: React.FC = () => {
               <li>
                 <Link to="/contact" className="hover:text-amber-300 transition-colors">Contact & Partnership</Link>
               </li>
+              {customPages.map((page) => (
+                <li key={page.id}>
+                  <Link to={`/page/${page.slug}`} className="text-amber-200/90 hover:text-amber-300 transition-colors">
+                    ★ {page.title}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
 

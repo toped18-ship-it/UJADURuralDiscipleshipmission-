@@ -22,6 +22,7 @@ export const AdminDashboardLayout: React.FC = () => {
 
   const navItems = [
     { label: 'Overview', path: '/admin/dashboard', icon: '📊' },
+    { label: 'Custom Pages', path: '/admin/pages', icon: '📄' },
     { label: 'Gallery Media', path: '/admin/gallery', icon: '🖼️' },
     { label: 'Audio Teachings', path: '/admin/audio', icon: '🎙️' },
     { label: 'Blog & Articles', path: '/admin/blog', icon: '📝' },

@@ -5,6 +5,10 @@ import {
   AudioTeaching,
   BlogPost,
   ContactMessage,
+  CustomPage,
+  CustomPageGalleryItem,
+  CustomPageSection,
+  CustomPageSlide,
   GalleryItem,
   NewsletterSubscriber,
   SiteSettings,
@@ -281,12 +285,93 @@ const DEFAULT_MESSAGES: ContactMessage[] = [
   },
 ];
 
+// DEFAULT CUSTOM PAGES SEED
+const DEFAULT_CUSTOM_PAGES: CustomPage[] = [
+  {
+    id: 'page-1',
+    title: 'Rural Discipleship Camp 2026',
+    slug: 'rural-discipleship-camp-2026',
+    subtitle: 'Equipping Village Pastors, Pioneer Evangelists, and Youth Leaders for Frontier Gospel Impact',
+    hero_image: 'https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?auto=format&fit=crop&w=1600&q=80',
+    content: `Welcome to the official portal for the UJADU Annual Rural Discipleship Camp.
+
+This annual gathering unites frontline village ministers, lay evangelists, and discipleship trainees from neglected rural settlements for 5 intensive days of deep biblical instruction, intercession, fellowship, and practical field evangelism strategies.
+
+Our vision is to empower every participant with sound doctrine, fervent prayer lives, and reproducible discipleship tools to plant healthy fellowship gatherings in unreached farming and riverine communities.`,
+    sections: [
+      {
+        id: 'sec-1',
+        heading: 'Program Curriculum & Training Tracks',
+        content: `Participants undergo systematic training covering three primary tracks:
+• Frontier Evangelism & Village Entry Strategies
+• Systematic Discipleship & New Believer Mentoring
+• Biblical Leadership & Village Church Stewardship`,
+      },
+      {
+        id: 'sec-2',
+        heading: 'Camp Logistics & Accommodations',
+        content: `All attendees are hosted at the UJADU Rural Base Camp with community dining, open-air devotional spaces, and dormitories provided through our mission partners' sacrificial support.`,
+      },
+    ],
+    slides: [
+      {
+        id: 'sl-1',
+        image_url: 'https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?auto=format&fit=crop&w=1200&q=80',
+        title: 'Frontier Discipleship Fellowship',
+        caption: 'Gathering under shade trees for deep scriptural exposition and mutual encouragement.',
+      },
+      {
+        id: 'sl-2',
+        image_url: 'https://images.unsplash.com/photo-1529070538774-1843cb3265df?auto=format&fit=crop&w=1200&q=80',
+        title: 'Village Bible Study Circles',
+        caption: 'Learning inductive Bible study methods to teach remote congregations with clarity and conviction.',
+      },
+      {
+        id: 'sl-3',
+        image_url: 'https://images.unsplash.com/photo-1509099836639-18ba1795216d?auto=format&fit=crop&w=1200&q=80',
+        title: 'Morning Intercessory Prayer Walks',
+        caption: 'Commencing each day with dawn prayer walks across farming settlements for spiritual breakthrough.',
+      },
+    ],
+    gallery: [
+      {
+        id: 'g-1',
+        image_url: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?auto=format&fit=crop&w=1000&q=80',
+        caption: 'Youth leaders training session in the mission hall',
+      },
+      {
+        id: 'g-2',
+        image_url: 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=1000&q=80',
+        caption: 'Evening worship gathering with village believers',
+      },
+      {
+        id: 'g-3',
+        image_url: 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=1000&q=80',
+        caption: 'Distributing open study Bibles to village pastors',
+      },
+      {
+        id: 'g-4',
+        image_url: 'https://images.unsplash.com/photo-1519834785169-98be25ec3f84?auto=format&fit=crop&w=1000&q=80',
+        caption: 'Prayer circle for rural mission revival and harvest',
+      },
+    ],
+    audio_title: 'The Call to Rural Frontier Evangelism',
+    audio_speaker: 'Evangelist S. O. Okon',
+    audio_storage_path: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+    audio_duration: 2140,
+    published: true,
+    created_at: new Date(Date.now() - 86400000 * 5).toISOString(),
+    updated_at: new Date(Date.now() - 86400000 * 5).toISOString(),
+  },
+];
+
 // LOCAL STORAGE KEYS
 const STORAGE_KEYS = {
   SETTINGS: 'ujadu_settings',
   GALLERY: 'ujadu_gallery',
   AUDIO: 'ujadu_audio',
   BLOGS: 'ujadu_blogs',
+  PAGES: 'ujadu_custom_pages',
   MESSAGES: 'ujadu_messages',
   SUBSCRIBERS: 'ujadu_subscribers',
 };
@@ -894,6 +979,149 @@ export class DataService {
     return true;
   }
 
+  // --- CUSTOM PAGES (HEADINGS, CONTENTS, GALLERY, SLIDES, AUDIO) ---
+  static async getCustomPages(includeUnpublished = false): Promise<CustomPage[]> {
+    if (isSupabaseConfigured) {
+      try {
+        let query = supabase.from('custom_pages').select('*').order('created_at', { ascending: false });
+        if (!includeUnpublished) query = query.eq('published', true);
+        const { data, error } = await query;
+        if (!error && data && data.length > 0) return data as CustomPage[];
+      } catch (err) {
+        console.error('Supabase getCustomPages error:', err);
+      }
+    }
+
+    const items = getStoredItem<CustomPage[]>(STORAGE_KEYS.PAGES, DEFAULT_CUSTOM_PAGES);
+
+    // Resolve any IndexedDB audio references in custom pages to live playable object URLs
+    const resolvedItems = await Promise.all(
+      items.map(async (item) => {
+        let audioPath = item.audio_storage_path;
+        const fileId = item.audio_file_id || (audioPath?.startsWith('idb://') ? audioPath.replace('idb://', '') : null);
+        if (fileId) {
+          const liveUrl = await AudioStore.getAudioUrl(fileId);
+          if (liveUrl) {
+            audioPath = liveUrl;
+          }
+        }
+        return {
+          ...item,
+          audio_storage_path: audioPath,
+        };
+      })
+    );
+
+    let filtered = resolvedItems;
+    if (!includeUnpublished) filtered = filtered.filter((p) => p.published);
+    return filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  static async getCustomPageBySlug(slug: string, includeUnpublished = false): Promise<CustomPage | null> {
+    const pages = await this.getCustomPages(includeUnpublished);
+    return pages.find((p) => p.slug.toLowerCase() === slug.toLowerCase()) || null;
+  }
+
+  static async saveCustomPage(page: Partial<CustomPage>): Promise<CustomPage> {
+    const now = new Date().toISOString();
+
+    // Ensure audio persistence format for IndexedDB
+    let persistentAudioPath = page.audio_storage_path;
+    let fileId = page.audio_file_id;
+    if (!fileId && persistentAudioPath?.startsWith('idb://')) {
+      fileId = persistentAudioPath.replace('idb://', '');
+    }
+    if (fileId && (persistentAudioPath?.startsWith('blob:') || (!persistentAudioPath?.startsWith('idb://') && !persistentAudioPath?.startsWith('http')))) {
+      persistentAudioPath = `idb://${fileId}`;
+    }
+
+    const cleanSlug = (page.slug || page.title || `page-${Date.now()}`)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    let saved: CustomPage;
+    if (page.id) {
+      saved = {
+        ...page,
+        slug: cleanSlug,
+        audio_file_id: fileId,
+        audio_storage_path: persistentAudioPath,
+        updated_at: now,
+      } as CustomPage;
+    } else {
+      saved = {
+        id: `page-${Date.now()}`,
+        title: page.title || 'Untitled Page',
+        slug: cleanSlug,
+        subtitle: page.subtitle || '',
+        hero_image: page.hero_image || '',
+        content: page.content || '',
+        sections: page.sections || [],
+        slides: page.slides || [],
+        gallery: page.gallery || [],
+        audio_title: page.audio_title || '',
+        audio_speaker: page.audio_speaker || '',
+        audio_storage_path: persistentAudioPath || '',
+        audio_file_id: fileId,
+        audio_duration: page.audio_duration || 0,
+        published: page.published ?? true,
+        created_at: now,
+        updated_at: now,
+      };
+    }
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('custom_pages').upsert(saved);
+      } catch (err) {
+        console.error('Supabase saveCustomPage error:', err);
+      }
+    }
+
+    const current = getStoredItem<CustomPage[]>(STORAGE_KEYS.PAGES, DEFAULT_CUSTOM_PAGES);
+    const idx = current.findIndex((p) => p.id === saved.id);
+    if (idx >= 0) {
+      current[idx] = saved;
+    } else {
+      current.unshift(saved);
+    }
+    setStoredItem(STORAGE_KEYS.PAGES, current);
+
+    // If audio is idb://, resolve to live blob URL before returning so UI can preview immediately
+    if (saved.audio_storage_path?.startsWith('idb://')) {
+      const liveId = saved.audio_storage_path.replace('idb://', '');
+      const liveUrl = await AudioStore.getAudioUrl(liveId);
+      if (liveUrl) {
+        return { ...saved, audio_storage_path: liveUrl };
+      }
+    }
+
+    return saved;
+  }
+
+  static async deleteCustomPage(id: string): Promise<boolean> {
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('custom_pages').delete().eq('id', id);
+      } catch (err) {
+        console.error('Supabase deleteCustomPage error:', err);
+      }
+    }
+
+    const current = getStoredItem<CustomPage[]>(STORAGE_KEYS.PAGES, DEFAULT_CUSTOM_PAGES);
+    const itemToDelete = current.find((p) => p.id === id);
+    if (itemToDelete) {
+      const fileId = itemToDelete.audio_file_id || (itemToDelete.audio_storage_path?.startsWith('idb://') ? itemToDelete.audio_storage_path.replace('idb://', '') : null);
+      if (fileId) {
+        await AudioStore.deleteAudioFile(fileId);
+      }
+    }
+    const filtered = current.filter((p) => p.id !== id);
+    setStoredItem(STORAGE_KEYS.PAGES, filtered);
+    return true;
+  }
+
   // --- ADMIN DASHBOARD STATS ---
   static async getAdminStats(): Promise<AdminStats> {
     const allBlogs = await this.getBlogPosts(undefined, true);
@@ -901,6 +1129,7 @@ export class DataService {
     const allAudio = await this.getAudioTeachings(undefined, true);
     const messages = await this.getMessages();
     const subscribers = await this.getSubscribers();
+    const customPages = await this.getCustomPages(true);
 
     return {
       publishedBlogs: allBlogs.filter((b) => b.status === 'published').length,
@@ -909,6 +1138,7 @@ export class DataService {
       publishedAudio: allAudio.filter((a) => a.published).length,
       totalMessages: messages.length,
       totalSubscribers: subscribers.length,
+      customPages: customPages.length,
     };
   }
 }

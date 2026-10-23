@@ -100,6 +100,29 @@
         "read": { "type": "boolean" }
       },
       "required": ["name", "email", "message", "created_at"]
+    },
+    "custom_pages": {
+      "title": "Custom Pages",
+      "description": "Custom ministry pages with headings, content, gallery, slides, and audio uploads",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "slug": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "hero_image": { "type": "string" },
+        "content": { "type": "string" },
+        "sections": { "type": "array" },
+        "slides": { "type": "array" },
+        "gallery": { "type": "array" },
+        "audio_title": { "type": "string" },
+        "audio_speaker": { "type": "string" },
+        "audio_storage_path": { "type": "string" },
+        "audio_file_id": { "type": "string" },
+        "audio_duration": { "type": "number" },
+        "published": { "type": "boolean" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["title", "slug", "content", "published"]
     }
   }
 }

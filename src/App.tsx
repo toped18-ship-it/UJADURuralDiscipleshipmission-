@@ -12,11 +12,13 @@ import { AdminDashboardLayout } from './pages/admin/AdminDashboardLayout';
 import { AdminGalleryPage } from './pages/admin/AdminGalleryPage';
 import { AdminLoginPage } from './pages/admin/AdminLoginPage';
 import { AdminOverviewPage } from './pages/admin/AdminOverviewPage';
+import { AdminPagesPage } from './pages/admin/AdminPagesPage';
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 import { AudioLibraryPage } from './pages/AudioLibraryPage';
 import { BlogPage } from './pages/BlogPage';
 import { BlogPostDetail } from './pages/BlogPostDetail';
 import { ContactPage } from './pages/ContactPage';
+import { CustomPageDetail } from './pages/CustomPageDetail';
 import { GalleryPage } from './pages/GalleryPage';
 import { HomePage } from './pages/HomePage';
 
@@ -95,6 +97,14 @@ export default function App() {
                 </PublicLayout>
               }
             />
+            <Route
+              path="/page/:slug"
+              element={
+                <PublicLayout>
+                  <CustomPageDetail />
+                </PublicLayout>
+              }
+            />
 
             {/* ADMIN LOGIN */}
             <Route
@@ -110,6 +120,7 @@ export default function App() {
             <Route path="/admin" element={<AdminDashboardLayout />}>
               <Route index element={<AdminOverviewPage />} />
               <Route path="dashboard" element={<AdminOverviewPage />} />
+              <Route path="pages" element={<AdminPagesPage />} />
               <Route path="gallery" element={<AdminGalleryPage />} />
               <Route path="audio" element={<AdminAudioPage />} />
               <Route path="blog" element={<AdminBlogPage />} />

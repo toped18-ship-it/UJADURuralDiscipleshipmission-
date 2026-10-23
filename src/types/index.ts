@@ -95,6 +95,45 @@ export interface NewsletterSubscriber {
   active: boolean;
 }
 
+export interface CustomPageSlide {
+  id: string;
+  image_url: string;
+  title?: string;
+  caption?: string;
+}
+
+export interface CustomPageGalleryItem {
+  id: string;
+  image_url: string;
+  caption?: string;
+}
+
+export interface CustomPageSection {
+  id: string;
+  heading: string;
+  content: string;
+}
+
+export interface CustomPage {
+  id: string;
+  title: string;
+  slug: string;
+  subtitle?: string;
+  hero_image?: string;
+  content: string;
+  sections?: CustomPageSection[];
+  slides?: CustomPageSlide[];
+  gallery?: CustomPageGalleryItem[];
+  audio_title?: string;
+  audio_speaker?: string;
+  audio_storage_path?: string;
+  audio_file_id?: string;
+  audio_duration?: number;
+  published: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AdminStats {
   publishedBlogs: number;
   draftBlogs: number;
@@ -102,4 +141,5 @@ export interface AdminStats {
   publishedAudio: number;
   totalMessages: number;
   totalSubscribers: number;
+  customPages?: number;
 }
