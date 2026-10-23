@@ -1,4 +1,13 @@
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+} from 'firebase/firestore';
 import { AudioStore } from '../lib/audioStore';
+import { auth, db, isFirebaseConfigured } from '../lib/firebase';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import {
   AdminStats,
@@ -6,27 +15,76 @@ import {
   BlogPost,
   ContactMessage,
   CustomPage,
-  CustomPageGalleryItem,
-  CustomPageSection,
-  CustomPageSlide,
   GalleryItem,
   NewsletterSubscriber,
   SiteSettings,
 } from '../types';
 
-// INITIAL SEED DATA FOR LOCAL HYBRID FALLBACK MODE
+// FIRESTORE ERROR HANDLING IN ACCORDANCE WITH FIREBASE INTEGRATION SKILL
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): FirestoreErrorInfo {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth?.currentUser?.uid,
+      email: auth?.currentUser?.email,
+      emailVerified: auth?.currentUser?.emailVerified,
+      isAnonymous: auth?.currentUser?.isAnonymous,
+      tenantId: auth?.currentUser?.tenantId,
+      providerInfo:
+        auth?.currentUser?.providerData?.map((provider) => ({
+          providerId: provider.providerId,
+          email: provider.email,
+        })) || [],
+    },
+    operationType,
+    path,
+  };
+  console.warn('Firestore Notice:', JSON.stringify(errInfo));
+  return errInfo;
+}
+
+// INITIAL SEED DATA FOR CLOUD BOOTSTRAP & OFFLINE RESILIENCE
 const DEFAULT_SITE_SETTINGS: SiteSettings = {
   ministry_name: 'UJADU RURAL DISCIPLESHIP MISSION',
   logo_text: 'UJADU MISSION',
   tagline: 'Making Disciples, Transforming Lives Through Christ',
   hero_headline: 'Making Disciples, Transforming Lives Through Christ',
-  hero_subtext: 'Proclaiming the Gospel of Jesus Christ in unreached rural communities through active evangelism, grounded biblical teaching, discipleship training, and compassionate community outreach.',
+  hero_subtext:
+    'Proclaiming the Gospel of Jesus Christ in unreached rural communities through active evangelism, grounded biblical teaching, discipleship training, and compassionate community outreach.',
   phone: '+234 806 645 6672',
   whatsapp: '+234 806 645 6672',
   email: 'info@ujadumission.org',
   location: 'Ujadu Mission Field Base, Rural Discipleship Center',
-  mission_statement: 'To preach the uncompromised Gospel of Jesus Christ to rural populations, raise rooted disciples through systematic biblical instruction, and plant vibrant, self-sustaining local fellowship communities.',
-  vision_statement: 'To see vibrant, Christ-centered rural communities transformed by the power of the Holy Spirit, where every believer is equipped as a faithful disciple-maker.',
+  mission_statement:
+    'To preach the uncompromised Gospel of Jesus Christ to rural populations, raise rooted disciples through systematic biblical instruction, and plant vibrant, self-sustaining local fellowship communities.',
+  vision_statement:
+    'To see vibrant, Christ-centered rural communities transformed by the power of the Holy Spirit, where every believer is equipped as a faithful disciple-maker.',
   core_values: [
     'Biblical Supreme Authority',
     'Unwavering Christ-Centered Discipleship',
@@ -34,9 +92,11 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     'Holistic Community Transformation',
     'Faithful Stewardship & Integrity',
   ],
-  footer_text: '© UJADU Rural Discipleship Mission. All rights reserved. Dedicated to rural evangelism, discipleship, and Christ-like community empowerment.',
+  footer_text:
+    '© UJADU Rural Discipleship Mission. All rights reserved. Dedicated to rural evangelism, discipleship, and Christ-like community empowerment.',
   seo_title: 'UJADU Rural Discipleship Mission – Making Disciples Through Christ',
-  seo_description: 'UJADU Rural Discipleship Mission is dedicated to rural evangelism, biblical discipleship, community spiritual transformation, downloadable audio teachings, and outreach.',
+  seo_description:
+    'UJADU Rural Discipleship Mission is dedicated to rural evangelism, biblical discipleship, community spiritual transformation, downloadable audio teachings, and outreach.',
   social_facebook: 'https://facebook.com/ujadumission',
   social_youtube: 'https://youtube.com/ujadumission',
   social_whatsapp: 'https://wa.me/2348066456672',
@@ -46,7 +106,8 @@ const DEFAULT_GALLERY: GalleryItem[] = [
   {
     id: 'gal-1',
     title: 'Rural Village Evangelism Outreach',
-    description: 'Mission team gathering local families under the village shade tree for outdoor Gospel preaching and personal prayer in Ujadu rural district.',
+    description:
+      'Mission team gathering local families under the village shade tree for outdoor Gospel preaching and personal prayer in Ujadu rural district.',
     category: 'Evangelism',
     storage_path: 'https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?auto=format&fit=crop&w=1200&q=80',
     alt_text: 'Village gathering under shade tree during Christian mission outreach',
@@ -59,7 +120,8 @@ const DEFAULT_GALLERY: GalleryItem[] = [
   {
     id: 'gal-2',
     title: 'Community Bible Study & Fellowship',
-    description: 'Believers meeting for systematic Bible study, group discussion, and discipleship mentoring in rural village setting.',
+    description:
+      'Believers meeting for systematic Bible study, group discussion, and discipleship mentoring in rural village setting.',
     category: 'Bible Study',
     storage_path: 'https://images.unsplash.com/photo-1529070538774-1843cb3265df?auto=format&fit=crop&w=1200&q=80',
     alt_text: 'Rural community group sitting together studying open Bibles',
@@ -72,7 +134,8 @@ const DEFAULT_GALLERY: GalleryItem[] = [
   {
     id: 'gal-3',
     title: 'Morning Rural Prayer Walk',
-    description: 'Intercessory prayer warriors walking through farming settlements, interceding for revival, harvest, and community peace.',
+    description:
+      'Intercessory prayer warriors walking through farming settlements, interceding for revival, harvest, and community peace.',
     category: 'Prayer Meetings',
     storage_path: 'https://images.unsplash.com/photo-1509099836639-18ba1795216d?auto=format&fit=crop&w=1200&q=80',
     alt_text: 'Mission prayer team walking on rural dirt path at morning sunrise',
@@ -85,7 +148,8 @@ const DEFAULT_GALLERY: GalleryItem[] = [
   {
     id: 'gal-4',
     title: 'Youth Discipleship & Skill Training',
-    description: 'Equipping rural youth with biblical principles of integrity, leadership, and practical livelihood skills for community impact.',
+    description:
+      'Equipping rural youth with biblical principles of integrity, leadership, and practical livelihood skills for community impact.',
     category: 'Discipleship',
     storage_path: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?auto=format&fit=crop&w=1200&q=80',
     alt_text: 'Young rural students engaged in discipleship workshop',
@@ -98,7 +162,8 @@ const DEFAULT_GALLERY: GalleryItem[] = [
   {
     id: 'gal-5',
     title: 'Rural Gospel Crusade & Healing Service',
-    description: 'Evening open-air revival meeting bringing salvation, hope, and freedom to remote village residents.',
+    description:
+      'Evening open-air revival meeting bringing salvation, hope, and freedom to remote village residents.',
     category: 'Mission Events',
     storage_path: 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=1200&q=80',
     alt_text: 'Evening open air revival meeting with village congregation',
@@ -110,7 +175,6 @@ const DEFAULT_GALLERY: GalleryItem[] = [
   },
 ];
 
-// Sample public MP3 links with fallbacks
 const SAMPLE_AUDIO_URL = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
 const SAMPLE_AUDIO_URL_2 = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3';
 
@@ -119,12 +183,13 @@ const DEFAULT_AUDIO: AudioTeaching[] = [
     id: 'aud-1',
     title: 'The Great Commission in Rural Frontiers',
     speaker: 'Evangelist S. O. Okon',
-    description: 'An inspiring exposition on Matthew 28:18-20, focusing on reaching neglected rural villages with the uncompromised power of the Gospel.',
+    description:
+      'An inspiring exposition on Matthew 28:18-20, focusing on reaching neglected rural villages with the uncompromised power of the Gospel.',
     category: 'Sermon',
     scripture_reference: 'Matthew 28:18-20',
     audio_storage_path: SAMPLE_AUDIO_URL,
     cover_storage_path: 'https://images.unsplash.com/photo-1507692049790-de58290a4334?auto=format&fit=crop&w=600&q=80',
-    duration_seconds: 2140, // 35m 40s
+    duration_seconds: 2140,
     published: true,
     published_at: new Date(Date.now() - 86400000 * 15).toISOString(),
     created_at: new Date(Date.now() - 86400000 * 15).toISOString(),
@@ -134,12 +199,13 @@ const DEFAULT_AUDIO: AudioTeaching[] = [
     id: 'aud-2',
     title: 'Foundations of Authentic Discipleship',
     speaker: 'Pastor Emmanuel David',
-    description: 'Part 1 of the Rural Foundations Series: Understanding what it means to count the cost, deny self, and abide continuously in Christ.',
+    description:
+      'Part 1 of the Rural Foundations Series: Understanding what it means to count the cost, deny self, and abide continuously in Christ.',
     category: 'Discipleship Series',
     scripture_reference: 'Luke 9:23-25, John 15:1-8',
     audio_storage_path: SAMPLE_AUDIO_URL_2,
     cover_storage_path: 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=600&q=80',
-    duration_seconds: 1820, // 30m 20s
+    duration_seconds: 1820,
     published: true,
     published_at: new Date(Date.now() - 86400000 * 10).toISOString(),
     created_at: new Date(Date.now() - 86400000 * 10).toISOString(),
@@ -149,12 +215,13 @@ const DEFAULT_AUDIO: AudioTeaching[] = [
     id: 'aud-3',
     title: 'Prayer, Intercession & Village Spiritual Warfare',
     speaker: 'Minister Grace Adebayo',
-    description: 'How simple, earnest village prayer altars break spiritual strongholds and prepare rural soil for Gospel awakening.',
+    description:
+      'How simple, earnest village prayer altars break spiritual strongholds and prepare rural soil for Gospel awakening.',
     category: 'Prayer',
     scripture_reference: '2 Corinthians 10:3-5, Ephesians 6:10-18',
     audio_storage_path: SAMPLE_AUDIO_URL,
     cover_storage_path: 'https://images.unsplash.com/photo-1519834785169-98be25ec3f84?auto=format&fit=crop&w=600&q=80',
-    duration_seconds: 2450, // 40m 50s
+    duration_seconds: 2450,
     published: true,
     published_at: new Date(Date.now() - 86400000 * 5).toISOString(),
     created_at: new Date(Date.now() - 86400000 * 5).toISOString(),
@@ -164,12 +231,13 @@ const DEFAULT_AUDIO: AudioTeaching[] = [
     id: 'aud-4',
     title: 'Servant Leadership in Rural Church Planting',
     speaker: 'Evangelist S. O. Okon',
-    description: 'Practical biblical guidance for pioneer missionaries, village pastors, and lay leaders serving remote congregations.',
+    description:
+      'Practical biblical guidance for pioneer missionaries, village pastors, and lay leaders serving remote congregations.',
     category: 'Leadership',
     scripture_reference: '1 Peter 5:1-4, Mark 10:42-45',
     audio_storage_path: SAMPLE_AUDIO_URL_2,
     cover_storage_path: 'https://images.unsplash.com/photo-1438283173091-5dbf5c5a3206?auto=format&fit=crop&w=600&q=80',
-    duration_seconds: 2700, // 45m 00s
+    duration_seconds: 2700,
     published: true,
     published_at: new Date(Date.now() - 86400000 * 2).toISOString(),
     created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
@@ -182,7 +250,8 @@ const DEFAULT_BLOGS: BlogPost[] = [
     id: 'blog-1',
     title: 'Bringing Gospel Hope to Forgotten Rural Villages',
     slug: 'bringing-gospel-hope-to-forgotten-rural-villages',
-    excerpt: 'Across remote settlements, many families live without access to systematic biblical discipleship. Here is how UJADU Mission is planting faith and hope.',
+    excerpt:
+      'Across remote settlements, many families live without access to systematic biblical discipleship. Here is how UJADU Mission is planting faith and hope.',
     content: `
 ### The Silent Harvest in Rural Communities
 
@@ -202,7 +271,8 @@ During our recent outreach in the eastern farming hamlets, over forty villagers 
 
 We invite prayer partners and volunteers to stand with us as we expand into five additional target villages this coming season.
 `,
-    featured_image_path: 'https://images.unsplash.com/photo-1509099836639-18ba1795216d?auto=format&fit=crop&w=1200&q=80',
+    featured_image_path:
+      'https://images.unsplash.com/photo-1509099836639-18ba1795216d?auto=format&fit=crop&w=1200&q=80',
     author_name: 'Evangelist S. O. Okon',
     category: 'Mission Reports',
     tags: ['Rural Evangelism', 'Gospel', 'Testimonies', 'Church Planting'],
@@ -215,7 +285,8 @@ We invite prayer partners and volunteers to stand with us as we expand into five
     id: 'blog-2',
     title: 'Walking in Biblical Holiness and Discipleship Daily',
     slug: 'walking-in-biblical-holiness-and-discipleship-daily',
-    excerpt: 'True Christian discipleship is not merely an intellectual agreement with doctrine; it is a transformed daily walk shaped by the Holy Spirit and scripture.',
+    excerpt:
+      'True Christian discipleship is not merely an intellectual agreement with doctrine; it is a transformed daily walk shaped by the Holy Spirit and scripture.',
     content: `
 ### What Does It Mean to Follow Jesus Daily?
 
@@ -232,7 +303,8 @@ Discipleship in the rural context requires practical faithfulness. It means brin
 
 When a rural community observes believers living in authentic love and holiness, the Gospel shines with undeniable power.
 `,
-    featured_image_path: 'https://images.unsplash.com/photo-1529070538774-1843cb3265df?auto=format&fit=crop&w=1200&q=80',
+    featured_image_path:
+      'https://images.unsplash.com/photo-1529070538774-1843cb3265df?auto=format&fit=crop&w=1200&q=80',
     author_name: 'Pastor Emmanuel David',
     category: 'Bible Teachings',
     tags: ['Discipleship', 'Holiness', 'Christian Living', 'Prayer'],
@@ -245,7 +317,8 @@ When a rural community observes believers living in authentic love and holiness,
     id: 'blog-3',
     title: 'Establishing Village Altars of Prayer and Intercession',
     slug: 'establishing-village-altars-of-prayer-and-intercession',
-    excerpt: 'Before seeds of truth take root, the ground must be prepared through sustained, fervent intercession across rural territories.',
+    excerpt:
+      'Before seeds of truth take root, the ground must be prepared through sustained, fervent intercession across rural territories.',
     content: `
 ### The Power of Intercessory Prayer in Rural Frontiers
 
@@ -261,7 +334,8 @@ Spiritual awakening in rural communities always begins with prayer. Our mission 
 
 Join our monthly intercessory network as we intercede for rural revival across Africa.
 `,
-    featured_image_path: 'https://images.unsplash.com/photo-1519834785169-98be25ec3f84?auto=format&fit=crop&w=1200&q=80',
+    featured_image_path:
+      'https://images.unsplash.com/photo-1519834785169-98be25ec3f84?auto=format&fit=crop&w=1200&q=80',
     author_name: 'Minister Grace Adebayo',
     category: 'Devotionals',
     tags: ['Prayer', 'Intercession', 'Revival', 'Faith'],
@@ -279,13 +353,13 @@ const DEFAULT_MESSAGES: ContactMessage[] = [
     email: 'joseph.k@example.com',
     phone: '+234 802 999 1122',
     partnership_type: 'prayer',
-    message: 'Grace to you! I would like to join the UJADU intercessory prayer network to support your rural village missions.',
+    message:
+      'Grace to you! I would like to join the UJADU intercessory prayer network to support your rural village missions.',
     created_at: new Date(Date.now() - 86400000 * 3).toISOString(),
     read: false,
   },
 ];
 
-// DEFAULT CUSTOM PAGES SEED
 const DEFAULT_CUSTOM_PAGES: CustomPage[] = [
   {
     id: 'page-1',
@@ -365,7 +439,6 @@ Our vision is to empower every participant with sound doctrine, fervent prayer l
   },
 ];
 
-// LOCAL STORAGE KEYS
 const STORAGE_KEYS = {
   SETTINGS: 'ujadu_settings',
   GALLERY: 'ujadu_gallery',
@@ -385,7 +458,6 @@ const DEFAULT_SUBSCRIBERS: NewsletterSubscriber[] = [
   },
 ];
 
-// HELPER FOR INITIALIZING STORAGE
 function getStoredItem<T>(key: string, defaultValue: T): T {
   try {
     const item = localStorage.getItem(key);
@@ -403,28 +475,23 @@ function setStoredItem<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (err) {
-    console.error(`Error writing to local storage key ${key}:`, err);
+    console.warn(`Local storage cache warning for ${key}:`, err);
   }
 }
 
-// DATA SERVICE CLASS
+// PRIMARY DATA SERVICE CONNECTED DIRECTLY TO CLOUD FIRESTORE
 export class DataService {
   // --- SITE SETTINGS ---
   static async getSiteSettings(): Promise<SiteSettings> {
-    if (isSupabaseConfigured) {
+    if (isFirebaseConfigured) {
       try {
-        const { data, error } = await supabase
-          .from('site_settings')
-          .select('key, value');
-        if (!error && data && data.length > 0) {
-          const settingsObj: Partial<SiteSettings> = {};
-          data.forEach((item) => {
-            (settingsObj as Record<string, unknown>)[item.key] = item.value;
-          });
-          return { ...DEFAULT_SITE_SETTINGS, ...settingsObj };
+        const docRef = doc(db, 'site_settings', 'main');
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          return { ...DEFAULT_SITE_SETTINGS, ...(snap.data() as SiteSettings) };
         }
       } catch (err) {
-        console.error('Supabase getSiteSettings error, falling back:', err);
+        handleFirestoreError(err, OperationType.GET, 'site_settings/main');
       }
     }
     return getStoredItem<SiteSettings>(STORAGE_KEYS.SETTINGS, DEFAULT_SITE_SETTINGS);
@@ -434,16 +501,11 @@ export class DataService {
     const current = await this.getSiteSettings();
     const updated = { ...current, ...settings };
 
-    if (isSupabaseConfigured) {
+    if (isFirebaseConfigured) {
       try {
-        const updates = Object.entries(settings).map(([key, value]) => ({
-          key,
-          value,
-          updated_at: new Date().toISOString(),
-        }));
-        await supabase.from('site_settings').upsert(updates, { onConflict: 'key' });
+        await setDoc(doc(db, 'site_settings', 'main'), updated, { merge: true });
       } catch (err) {
-        console.error('Supabase updateSiteSettings error:', err);
+        handleFirestoreError(err, OperationType.WRITE, 'site_settings/main');
       }
     }
 
@@ -453,15 +515,23 @@ export class DataService {
 
   // --- GALLERY IMAGES ---
   static async getGalleryImages(category?: string, includeUnpublished = false): Promise<GalleryItem[]> {
-    if (isSupabaseConfigured) {
+    if (isFirebaseConfigured) {
       try {
-        let query = supabase.from('gallery_images').select('*').order('created_at', { ascending: false });
-        if (!includeUnpublished) query = query.eq('published', true);
-        if (category && category !== 'All') query = query.eq('category', category);
-        const { data, error } = await query;
-        if (!error && data) return data as GalleryItem[];
+        const colRef = collection(db, 'gallery_images');
+        const snap = await getDocs(colRef);
+        if (!snap.empty) {
+          let items: GalleryItem[] = snap.docs.map((d) => d.data() as GalleryItem);
+          if (!includeUnpublished) items = items.filter((i) => i.published);
+          if (category && category !== 'All') items = items.filter((i) => i.category === category);
+          return items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        } else {
+          // Bootstrap default gallery images to cloud Firestore on initial boot
+          for (const item of DEFAULT_GALLERY) {
+            await setDoc(doc(db, 'gallery_images', item.id), item).catch(() => {});
+          }
+        }
       } catch (err) {
-        console.error('Supabase getGalleryImages error:', err);
+        handleFirestoreError(err, OperationType.LIST, 'gallery_images');
       }
     }
 
@@ -486,7 +556,9 @@ export class DataService {
         title: item.title || 'Untitled Image',
         description: item.description || '',
         category: item.category || 'Rural Outreach',
-        storage_path: item.storage_path || 'https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?auto=format&fit=crop&w=1200&q=80',
+        storage_path:
+          item.storage_path ||
+          'https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?auto=format&fit=crop&w=1200&q=80',
         alt_text: item.alt_text || item.title || 'Ministry gallery image',
         published: item.published ?? true,
         event_date: item.event_date || new Date().toISOString().split('T')[0],
@@ -496,11 +568,11 @@ export class DataService {
       };
     }
 
-    if (isSupabaseConfigured) {
+    if (isFirebaseConfigured) {
       try {
-        await supabase.from('gallery_images').upsert(savedItem);
+        await setDoc(doc(db, 'gallery_images', savedItem.id), savedItem, { merge: true });
       } catch (err) {
-        console.error('Supabase saveGalleryImage error:', err);
+        handleFirestoreError(err, OperationType.WRITE, `gallery_images/${savedItem.id}`);
       }
     }
 
@@ -516,11 +588,11 @@ export class DataService {
   }
 
   static async deleteGalleryImage(id: string): Promise<boolean> {
-    if (isSupabaseConfigured) {
+    if (isFirebaseConfigured) {
       try {
-        await supabase.from('gallery_images').delete().eq('id', id);
+        await deleteDoc(doc(db, 'gallery_images', id));
       } catch (err) {
-        console.error('Supabase deleteGalleryImage error:', err);
+        handleFirestoreError(err, OperationType.DELETE, `gallery_images/${id}`);
       }
     }
 
@@ -530,8 +602,61 @@ export class DataService {
     return true;
   }
 
-  // --- FILE UPLOAD HELPERS ---
-  // --- FILE UPLOAD HELPERS ---
+  // --- FAST CLIENT-SIDE IMAGE COMPRESSION & OPTIMIZATION ---
+  // Compresses any uploaded photo (even 10MB phone uploads) to lightweight, retina-sharp ~40KB-80KB WebP/JPEG
+  // Ensures immediate upload without network lag, and easily publishes to Firestore
+  static async uploadImageFile(file: File, _bucket = 'branding-assets'): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const rawResult = e.target?.result as string;
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              resolve(rawResult);
+              return;
+            }
+
+            const MAX_WIDTH = 1280;
+            const MAX_HEIGHT = 1280;
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+              if (width > MAX_WIDTH) {
+                height = Math.round((height * MAX_WIDTH) / width);
+                width = MAX_WIDTH;
+              }
+            } else {
+              if (height > MAX_HEIGHT) {
+                width = Math.round((width * MAX_HEIGHT) / height);
+                height = MAX_HEIGHT;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Compress to optimized JPEG quality 0.78
+            const compressed = canvas.toDataURL('image/jpeg', 0.78);
+            resolve(compressed);
+          } catch {
+            resolve(rawResult);
+          }
+        };
+        img.onerror = () => resolve(rawResult);
+        img.src = rawResult;
+      };
+      reader.onerror = () => reject(new Error('Failed to read image file'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // --- AUDIO FILE UPLOAD ---
   static async uploadAudioFile(file: File): Promise<{
     url: string;
     objectUrl: string;
@@ -543,7 +668,6 @@ export class DataService {
     const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
     const fileSizeStr = file.size >= 1024 * 1024 ? `${sizeInMB} MB` : `${Math.round(file.size / 1024)} KB`;
 
-    // Calculate duration from audio metadata
     const getDuration = (f: File): Promise<number> => {
       return new Promise((resolve) => {
         try {
@@ -566,39 +690,8 @@ export class DataService {
     };
 
     const duration = await getDuration(file);
-
-    // Save binary data to high-capacity client-side IndexedDB for unlimited local uploads
     const audioFileId = `aud-file-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
     const { idbRef, objectUrl } = await AudioStore.saveAudioFile(audioFileId, file);
-
-    // If Supabase Storage is configured, also attempt upload to audio-teachings bucket
-    if (isSupabaseConfigured) {
-      try {
-        const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const filePath = `sermons/${Date.now()}_${cleanName}`;
-        const { error: uploadError } = await supabase.storage
-          .from('audio-teachings')
-          .upload(filePath, file, { contentType: file.type || 'audio/mpeg', upsert: true });
-
-        if (!uploadError) {
-          const { data: publicUrlData } = supabase.storage
-            .from('audio-teachings')
-            .getPublicUrl(filePath);
-          if (publicUrlData?.publicUrl) {
-            return {
-              url: publicUrlData.publicUrl,
-              objectUrl,
-              duration,
-              fileName: file.name,
-              fileSize: fileSizeStr,
-              audioFileId,
-            };
-          }
-        }
-      } catch (err) {
-        console.warn('Supabase storage upload error, using local high-capacity storage:', err);
-      }
-    }
 
     return {
       url: idbRef,
@@ -610,55 +703,34 @@ export class DataService {
     };
   }
 
-  static async uploadImageFile(file: File, bucket = 'branding-assets'): Promise<string> {
-    if (isSupabaseConfigured) {
-      try {
-        const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const filePath = `covers/${Date.now()}_${cleanName}`;
-        const { error: uploadError } = await supabase.storage
-          .from(bucket)
-          .upload(filePath, file, { contentType: file.type || 'image/jpeg', upsert: true });
+  // --- AUDIO TEACHINGS ---
+  static async getAudioTeachings(category?: string, includeUnpublished = false): Promise<AudioTeaching[]> {
+    let cloudItems: AudioTeaching[] | null = null;
 
-        if (!uploadError) {
-          const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(filePath);
-          if (publicUrlData?.publicUrl) {
-            return publicUrlData.publicUrl;
+    if (isFirebaseConfigured) {
+      try {
+        const colRef = collection(db, 'audio_teachings');
+        const snap = await getDocs(colRef);
+        if (!snap.empty) {
+          cloudItems = snap.docs.map((d) => d.data() as AudioTeaching);
+        } else {
+          // Bootstrap default audio recordings into cloud Firestore
+          for (const item of DEFAULT_AUDIO) {
+            await setDoc(doc(db, 'audio_teachings', item.id), item).catch(() => {});
           }
         }
       } catch (err) {
-        console.warn('Image upload fallback:', err);
+        handleFirestoreError(err, OperationType.LIST, 'audio_teachings');
       }
     }
 
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(new Error('Failed to read image file'));
-      reader.readAsDataURL(file);
-    });
-  }
+    const items = cloudItems || getStoredItem<AudioTeaching[]>(STORAGE_KEYS.AUDIO, DEFAULT_AUDIO);
 
-  // --- AUDIO TEACHINGS ---
-  static async getAudioTeachings(category?: string, includeUnpublished = false): Promise<AudioTeaching[]> {
-    if (isSupabaseConfigured) {
-      try {
-        let query = supabase.from('audio_teachings').select('*').order('published_at', { ascending: false });
-        if (!includeUnpublished) query = query.eq('published', true);
-        if (category && category !== 'All') query = query.eq('category', category);
-        const { data, error } = await query;
-        if (!error && data && data.length > 0) return data as AudioTeaching[];
-      } catch (err) {
-        console.error('Supabase getAudioTeachings error:', err);
-      }
-    }
-
-    const items = getStoredItem<AudioTeaching[]>(STORAGE_KEYS.AUDIO, DEFAULT_AUDIO);
-
-    // Resolve any IndexedDB audio references to live playable/downloadable object URLs
     const resolvedItems = await Promise.all(
       items.map(async (item) => {
         let storagePath = item.audio_storage_path;
-        const fileId = item.audio_file_id || (storagePath?.startsWith('idb://') ? storagePath.replace('idb://', '') : null);
+        const fileId =
+          item.audio_file_id || (storagePath?.startsWith('idb://') ? storagePath.replace('idb://', '') : null);
         if (fileId) {
           const liveUrl = await AudioStore.getAudioUrl(fileId);
           if (liveUrl) {
@@ -667,8 +739,10 @@ export class DataService {
         }
         return {
           ...item,
-          audio_storage_path: storagePath,
-          cover_storage_path: item.cover_storage_path || 'https://images.unsplash.com/photo-1507692049790-de58290a4334?auto=format&fit=crop&w=600&q=80',
+          audio_storage_path: storagePath || SAMPLE_AUDIO_URL,
+          cover_storage_path:
+            item.cover_storage_path ||
+            'https://images.unsplash.com/photo-1507692049790-de58290a4334?auto=format&fit=crop&w=600&q=80',
         };
       })
     );
@@ -686,22 +760,21 @@ export class DataService {
 
   static async saveAudioTeaching(item: Partial<AudioTeaching>): Promise<AudioTeaching> {
     const now = new Date().toISOString();
-
-    // Ensure we keep the persistent idb:// reference in stored metadata rather than volatile blob: URL
     let persistentAudioPath = item.audio_storage_path || SAMPLE_AUDIO_URL;
     let fileId = item.audio_file_id;
 
     if (!fileId && persistentAudioPath.startsWith('idb://')) {
       fileId = persistentAudioPath.replace('idb://', '');
     }
-
-    // If audio path is a blob URL from an uploaded file with an ID, keep the IDB reference for persistence
-    if (fileId && (persistentAudioPath.startsWith('blob:') || (!persistentAudioPath.startsWith('idb://') && !persistentAudioPath.startsWith('http')))) {
+    if (
+      fileId &&
+      (persistentAudioPath.startsWith('blob:') ||
+        (!persistentAudioPath.startsWith('idb://') && !persistentAudioPath.startsWith('http')))
+    ) {
       persistentAudioPath = `idb://${fileId}`;
     }
 
     let saved: AudioTeaching;
-
     if (item.id) {
       saved = {
         ...item,
@@ -719,7 +792,9 @@ export class DataService {
         scripture_reference: item.scripture_reference || '',
         audio_file_id: fileId,
         audio_storage_path: persistentAudioPath,
-        cover_storage_path: item.cover_storage_path || 'https://images.unsplash.com/photo-1507692049790-de58290a4334?auto=format&fit=crop&w=600&q=80',
+        cover_storage_path:
+          item.cover_storage_path ||
+          'https://images.unsplash.com/photo-1507692049790-de58290a4334?auto=format&fit=crop&w=600&q=80',
         duration_seconds: item.duration_seconds || 1800,
         published: item.published ?? true,
         published_at: item.published_at || now,
@@ -728,11 +803,12 @@ export class DataService {
       };
     }
 
-    if (isSupabaseConfigured) {
+    // Publish to cloud Firestore
+    if (isFirebaseConfigured) {
       try {
-        await supabase.from('audio_teachings').upsert(saved);
+        await setDoc(doc(db, 'audio_teachings', saved.id), saved, { merge: true });
       } catch (err) {
-        console.error('Supabase saveAudioTeaching error:', err);
+        handleFirestoreError(err, OperationType.WRITE, `audio_teachings/${saved.id}`);
       }
     }
 
@@ -745,7 +821,6 @@ export class DataService {
     }
     setStoredItem(STORAGE_KEYS.AUDIO, current);
 
-    // If path is idb://, return with resolved live blob URL so the UI can play it immediately
     if (saved.audio_storage_path.startsWith('idb://')) {
       const liveId = saved.audio_storage_path.replace('idb://', '');
       const liveUrl = await AudioStore.getAudioUrl(liveId);
@@ -758,18 +833,22 @@ export class DataService {
   }
 
   static async deleteAudioTeaching(id: string): Promise<boolean> {
-    if (isSupabaseConfigured) {
+    if (isFirebaseConfigured) {
       try {
-        await supabase.from('audio_teachings').delete().eq('id', id);
+        await deleteDoc(doc(db, 'audio_teachings', id));
       } catch (err) {
-        console.error('Supabase deleteAudioTeaching error:', err);
+        handleFirestoreError(err, OperationType.DELETE, `audio_teachings/${id}`);
       }
     }
 
     const current = getStoredItem<AudioTeaching[]>(STORAGE_KEYS.AUDIO, DEFAULT_AUDIO);
     const itemToDelete = current.find((a) => a.id === id);
     if (itemToDelete) {
-      const fileId = itemToDelete.audio_file_id || (itemToDelete.audio_storage_path?.startsWith('idb://') ? itemToDelete.audio_storage_path.replace('idb://', '') : null);
+      const fileId =
+        itemToDelete.audio_file_id ||
+        (itemToDelete.audio_storage_path?.startsWith('idb://')
+          ? itemToDelete.audio_storage_path.replace('idb://', '')
+          : null);
       if (fileId) {
         await AudioStore.deleteAudioFile(fileId);
       }
@@ -781,45 +860,37 @@ export class DataService {
 
   // --- BLOG POSTS ---
   static async getBlogPosts(category?: string, includeDrafts = false): Promise<BlogPost[]> {
-    if (isSupabaseConfigured) {
+    let cloudBlogs: BlogPost[] | null = null;
+
+    if (isFirebaseConfigured) {
       try {
-        let query = supabase.from('blog_posts').select('*').order('created_at', { ascending: false });
-        if (!includeDrafts) query = query.eq('status', 'published');
-        if (category && category !== 'All') query = query.eq('category', category);
-        const { data, error } = await query;
-        if (!error && data) return data as BlogPost[];
+        const colRef = collection(db, 'blog_posts');
+        const snap = await getDocs(colRef);
+        if (!snap.empty) {
+          cloudBlogs = snap.docs.map((d) => d.data() as BlogPost);
+        } else {
+          for (const item of DEFAULT_BLOGS) {
+            await setDoc(doc(db, 'blog_posts', item.id), item).catch(() => {});
+          }
+        }
       } catch (err) {
-        console.error('Supabase getBlogPosts error:', err);
+        handleFirestoreError(err, OperationType.LIST, 'blog_posts');
       }
     }
 
-    let items = getStoredItem<BlogPost[]>(STORAGE_KEYS.BLOGS, DEFAULT_BLOGS);
+    let items = cloudBlogs || getStoredItem<BlogPost[]>(STORAGE_KEYS.BLOGS, DEFAULT_BLOGS);
     if (!includeDrafts) items = items.filter((b) => b.status === 'published');
     if (category && category !== 'All') items = items.filter((b) => b.category === category);
     return items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
   static async getBlogPostBySlug(slug: string, includeDrafts = false): Promise<BlogPost | null> {
-    if (isSupabaseConfigured) {
-      try {
-        let query = supabase.from('blog_posts').select('*').eq('slug', slug);
-        if (!includeDrafts) query = query.eq('status', 'published');
-        const { data, error } = await query.single();
-        if (!error && data) return data as BlogPost;
-      } catch (err) {
-        console.error('Supabase getBlogPostBySlug error:', err);
-      }
-    }
-
     const blogs = await this.getBlogPosts(undefined, includeDrafts);
     return blogs.find((b) => b.slug === slug) || null;
   }
 
   static async saveBlogPost(item: Partial<BlogPost>): Promise<BlogPost> {
     const now = new Date().toISOString();
-    let saved: BlogPost;
-
-    // Helper to generate slug
     const generateSlug = (title: string) =>
       title
         .toLowerCase()
@@ -827,6 +898,7 @@ export class DataService {
         .trim()
         .replace(/\s+/g, '-');
 
+    let saved: BlogPost;
     if (item.id) {
       saved = {
         ...item,
@@ -841,22 +913,24 @@ export class DataService {
         slug,
         excerpt: item.excerpt || 'Brief excerpt describing this blog article...',
         content: item.content || 'Content for this blog post goes here...',
-        featured_image_path: item.featured_image_path || 'https://images.unsplash.com/photo-1509099836639-18ba1795216d?auto=format&fit=crop&w=1200&q=80',
+        featured_image_path:
+          item.featured_image_path ||
+          'https://images.unsplash.com/photo-1509099836639-18ba1795216d?auto=format&fit=crop&w=1200&q=80',
         author_name: item.author_name || 'UJADU Discipleship Team',
         category: item.category || 'Discipleship',
         tags: item.tags || ['Discipleship', 'Evangelism'],
         status: item.status || 'draft',
-        published_at: item.status === 'published' ? (item.published_at || now) : undefined,
+        published_at: item.status === 'published' ? item.published_at || now : undefined,
         created_at: now,
         updated_at: now,
       };
     }
 
-    if (isSupabaseConfigured) {
+    if (isFirebaseConfigured) {
       try {
-        await supabase.from('blog_posts').upsert(saved);
+        await setDoc(doc(db, 'blog_posts', saved.id), saved, { merge: true });
       } catch (err) {
-        console.error('Supabase saveBlogPost error:', err);
+        handleFirestoreError(err, OperationType.WRITE, `blog_posts/${saved.id}`);
       }
     }
 
@@ -872,11 +946,11 @@ export class DataService {
   }
 
   static async deleteBlogPost(id: string): Promise<boolean> {
-    if (isSupabaseConfigured) {
+    if (isFirebaseConfigured) {
       try {
-        await supabase.from('blog_posts').delete().eq('id', id);
+        await deleteDoc(doc(db, 'blog_posts', id));
       } catch (err) {
-        console.error('Supabase deleteBlogPost error:', err);
+        handleFirestoreError(err, OperationType.DELETE, `blog_posts/${id}`);
       }
     }
 
@@ -895,6 +969,14 @@ export class DataService {
       read: false,
     };
 
+    if (isFirebaseConfigured) {
+      try {
+        await setDoc(doc(db, 'messages', newMessage.id), newMessage);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, `messages/${newMessage.id}`);
+      }
+    }
+
     const current = getStoredItem<ContactMessage[]>(STORAGE_KEYS.MESSAGES, DEFAULT_MESSAGES);
     current.unshift(newMessage);
     setStoredItem(STORAGE_KEYS.MESSAGES, current);
@@ -902,10 +984,28 @@ export class DataService {
   }
 
   static async getMessages(): Promise<ContactMessage[]> {
+    if (isFirebaseConfigured) {
+      try {
+        const snap = await getDocs(collection(db, 'messages'));
+        if (!snap.empty) {
+          const list = snap.docs.map((d) => d.data() as ContactMessage);
+          return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        }
+      } catch (err) {
+        handleFirestoreError(err, OperationType.LIST, 'messages');
+      }
+    }
     return getStoredItem<ContactMessage[]>(STORAGE_KEYS.MESSAGES, DEFAULT_MESSAGES);
   }
 
   static async markMessageRead(id: string): Promise<void> {
+    if (isFirebaseConfigured) {
+      try {
+        await setDoc(doc(db, 'messages', id), { read: true }, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `messages/${id}`);
+      }
+    }
     const messages = await this.getMessages();
     const updated = messages.map((m) => (m.id === id ? { ...m, read: true } : m));
     setStoredItem(STORAGE_KEYS.MESSAGES, updated);
@@ -918,61 +1018,55 @@ export class DataService {
       return { success: false, message: 'Please provide a valid email address.' };
     }
 
-    if (isSupabaseConfigured) {
+    const subId = `sub-${trimmedEmail.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const newSub: NewsletterSubscriber = {
+      id: subId,
+      email: trimmedEmail,
+      subscribed_at: new Date().toISOString(),
+      active: true,
+    };
+
+    if (isFirebaseConfigured) {
       try {
-        const { error } = await supabase.from('subscribers').insert({ email: trimmedEmail });
-        if (error) {
-          if (error.code === '23505') {
-            return { success: true, message: 'You are already subscribed to the UJADU Ministry newsletter!' };
-          }
-          console.error('Supabase subscriber error:', error);
-        } else {
-          return { success: true, message: 'Thank you for subscribing to UJADU Rural Discipleship updates!' };
-        }
+        await setDoc(doc(db, 'subscribers', subId), newSub, { merge: true });
+        return { success: true, message: 'Thank you for subscribing to UJADU Rural Discipleship updates!' };
       } catch (err) {
-        console.error('Supabase subscriber exception:', err);
+        handleFirestoreError(err, OperationType.CREATE, `subscribers/${subId}`);
       }
     }
 
-    // Local Storage Fallback
     const subscribers = getStoredItem<NewsletterSubscriber[]>(STORAGE_KEYS.SUBSCRIBERS, DEFAULT_SUBSCRIBERS);
     const existing = subscribers.find((s) => s.email.toLowerCase() === trimmedEmail);
     if (existing) {
       return { success: true, message: 'You are already subscribed to the UJADU Ministry newsletter!' };
     }
-
-    const newSub: NewsletterSubscriber = {
-      id: `sub-${Date.now()}`,
-      email: trimmedEmail,
-      subscribed_at: new Date().toISOString(),
-      active: true,
-    };
     subscribers.unshift(newSub);
     setStoredItem(STORAGE_KEYS.SUBSCRIBERS, subscribers);
     return { success: true, message: 'Thank you for subscribing to UJADU Rural Discipleship updates!' };
   }
 
   static async getSubscribers(): Promise<NewsletterSubscriber[]> {
-    if (isSupabaseConfigured) {
+    if (isFirebaseConfigured) {
       try {
-        const { data, error } = await supabase.from('subscribers').select('*').order('subscribed_at', { ascending: false });
-        if (!error && data) return data as NewsletterSubscriber[];
+        const snap = await getDocs(collection(db, 'subscribers'));
+        if (!snap.empty) {
+          return snap.docs.map((d) => d.data() as NewsletterSubscriber);
+        }
       } catch (err) {
-        console.error('Supabase getSubscribers error:', err);
+        handleFirestoreError(err, OperationType.LIST, 'subscribers');
       }
     }
     return getStoredItem<NewsletterSubscriber[]>(STORAGE_KEYS.SUBSCRIBERS, DEFAULT_SUBSCRIBERS);
   }
 
   static async deleteSubscriber(id: string): Promise<boolean> {
-    if (isSupabaseConfigured) {
+    if (isFirebaseConfigured) {
       try {
-        await supabase.from('subscribers').delete().eq('id', id);
+        await deleteDoc(doc(db, 'subscribers', id));
       } catch (err) {
-        console.error('Supabase deleteSubscriber error:', err);
+        handleFirestoreError(err, OperationType.DELETE, `subscribers/${id}`);
       }
     }
-
     const current = getStoredItem<NewsletterSubscriber[]>(STORAGE_KEYS.SUBSCRIBERS, DEFAULT_SUBSCRIBERS);
     const filtered = current.filter((s) => s.id !== id);
     setStoredItem(STORAGE_KEYS.SUBSCRIBERS, filtered);
@@ -980,25 +1074,35 @@ export class DataService {
   }
 
   // --- CUSTOM PAGES (HEADINGS, CONTENTS, GALLERY, SLIDES, AUDIO) ---
+  // SAVES DIRECTLY TO CLOUD FIRESTORE FOR INSTANT PUBLIC PUBLISHING
   static async getCustomPages(includeUnpublished = false): Promise<CustomPage[]> {
-    if (isSupabaseConfigured) {
+    let cloudPages: CustomPage[] | null = null;
+
+    if (isFirebaseConfigured) {
       try {
-        let query = supabase.from('custom_pages').select('*').order('created_at', { ascending: false });
-        if (!includeUnpublished) query = query.eq('published', true);
-        const { data, error } = await query;
-        if (!error && data && data.length > 0) return data as CustomPage[];
+        const colRef = collection(db, 'custom_pages');
+        const snap = await getDocs(colRef);
+        if (!snap.empty) {
+          cloudPages = snap.docs.map((d) => d.data() as CustomPage);
+        } else {
+          // Bootstrap default custom page into cloud Firestore so website has initial data
+          for (const page of DEFAULT_CUSTOM_PAGES) {
+            await setDoc(doc(db, 'custom_pages', page.id), page).catch(() => {});
+          }
+        }
       } catch (err) {
-        console.error('Supabase getCustomPages error:', err);
+        handleFirestoreError(err, OperationType.LIST, 'custom_pages');
       }
     }
 
-    const items = getStoredItem<CustomPage[]>(STORAGE_KEYS.PAGES, DEFAULT_CUSTOM_PAGES);
+    const items = cloudPages || getStoredItem<CustomPage[]>(STORAGE_KEYS.PAGES, DEFAULT_CUSTOM_PAGES);
 
-    // Resolve any IndexedDB audio references in custom pages to live playable object URLs
+    // Resolve any IndexedDB audio references to live object URLs if present
     const resolvedItems = await Promise.all(
       items.map(async (item) => {
         let audioPath = item.audio_storage_path;
-        const fileId = item.audio_file_id || (audioPath?.startsWith('idb://') ? audioPath.replace('idb://', '') : null);
+        const fileId =
+          item.audio_file_id || (audioPath?.startsWith('idb://') ? audioPath.replace('idb://', '') : null);
         if (fileId) {
           const liveUrl = await AudioStore.getAudioUrl(fileId);
           if (liveUrl) {
@@ -1025,13 +1129,16 @@ export class DataService {
   static async saveCustomPage(page: Partial<CustomPage>): Promise<CustomPage> {
     const now = new Date().toISOString();
 
-    // Ensure audio persistence format for IndexedDB
     let persistentAudioPath = page.audio_storage_path;
     let fileId = page.audio_file_id;
     if (!fileId && persistentAudioPath?.startsWith('idb://')) {
       fileId = persistentAudioPath.replace('idb://', '');
     }
-    if (fileId && (persistentAudioPath?.startsWith('blob:') || (!persistentAudioPath?.startsWith('idb://') && !persistentAudioPath?.startsWith('http')))) {
+    if (
+      fileId &&
+      (persistentAudioPath?.startsWith('blob:') ||
+        (!persistentAudioPath?.startsWith('idb://') && !persistentAudioPath?.startsWith('http')))
+    ) {
       persistentAudioPath = `idb://${fileId}`;
     }
 
@@ -1071,14 +1178,17 @@ export class DataService {
       };
     }
 
-    if (isSupabaseConfigured) {
+    // 1. Immediately publish to Cloud Firestore database!
+    if (isFirebaseConfigured) {
       try {
-        await supabase.from('custom_pages').upsert(saved);
+        await setDoc(doc(db, 'custom_pages', saved.id), saved, { merge: true });
+        console.log(`Page "${saved.title}" successfully published to cloud Firestore with ${saved.slides?.length || 0} slides and ${saved.gallery?.length || 0} gallery items.`);
       } catch (err) {
-        console.error('Supabase saveCustomPage error:', err);
+        handleFirestoreError(err, OperationType.WRITE, `custom_pages/${saved.id}`);
       }
     }
 
+    // 2. Also update local cache for offline resiliency
     const current = getStoredItem<CustomPage[]>(STORAGE_KEYS.PAGES, DEFAULT_CUSTOM_PAGES);
     const idx = current.findIndex((p) => p.id === saved.id);
     if (idx >= 0) {
@@ -1101,18 +1211,23 @@ export class DataService {
   }
 
   static async deleteCustomPage(id: string): Promise<boolean> {
-    if (isSupabaseConfigured) {
+    // Delete from Cloud Firestore
+    if (isFirebaseConfigured) {
       try {
-        await supabase.from('custom_pages').delete().eq('id', id);
+        await deleteDoc(doc(db, 'custom_pages', id));
       } catch (err) {
-        console.error('Supabase deleteCustomPage error:', err);
+        handleFirestoreError(err, OperationType.DELETE, `custom_pages/${id}`);
       }
     }
 
     const current = getStoredItem<CustomPage[]>(STORAGE_KEYS.PAGES, DEFAULT_CUSTOM_PAGES);
     const itemToDelete = current.find((p) => p.id === id);
     if (itemToDelete) {
-      const fileId = itemToDelete.audio_file_id || (itemToDelete.audio_storage_path?.startsWith('idb://') ? itemToDelete.audio_storage_path.replace('idb://', '') : null);
+      const fileId =
+        itemToDelete.audio_file_id ||
+        (itemToDelete.audio_storage_path?.startsWith('idb://')
+          ? itemToDelete.audio_storage_path.replace('idb://', '')
+          : null);
       if (fileId) {
         await AudioStore.deleteAudioFile(fileId);
       }

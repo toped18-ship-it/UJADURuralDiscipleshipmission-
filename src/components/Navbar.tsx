@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import { DataService } from '../services/dataService';
 import { CustomPage } from '../types';
 
@@ -9,7 +8,6 @@ export const Navbar: React.FC = () => {
   const [pagesDropdownOpen, setPagesDropdownOpen] = useState(false);
   const [customPages, setCustomPages] = useState<CustomPage[]>([]);
   const location = useLocation();
-  const { isAdmin } = useAuth();
 
   useEffect(() => {
     DataService.getCustomPages().then((data) => setCustomPages(data));
@@ -111,16 +109,8 @@ export const Navbar: React.FC = () => {
             )}
           </nav>
 
-          {/* Zone 3: Actions & Admin Link */}
+          {/* Zone 3: Actions */}
           <div className="hidden sm:flex items-center gap-3 shrink-0">
-            {isAdmin && (
-              <Link
-                to="/admin/pages"
-                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-900/70 text-amber-300 border border-amber-400/40 hover:bg-emerald-800 transition-colors"
-              >
-                ⚙️ Admin Panel
-              </Link>
-            )}
             <Link
               to="/contact"
               className="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-400 text-emerald-950 hover:bg-amber-300 transition-colors shadow-sm whitespace-nowrap"
@@ -188,15 +178,6 @@ export const Navbar: React.FC = () => {
           )}
 
           <div className="pt-3 border-t border-emerald-900 flex flex-col gap-2">
-            {isAdmin && (
-              <Link
-                to="/admin/pages"
-                onClick={() => setIsOpen(false)}
-                className="w-full text-center py-2 text-xs font-semibold rounded-lg bg-emerald-900 text-amber-300 border border-amber-400/30"
-              >
-                ⚙️ Admin Panel
-              </Link>
-            )}
             <Link
               to="/contact"
               onClick={() => setIsOpen(false)}

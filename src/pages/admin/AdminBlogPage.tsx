@@ -22,7 +22,24 @@ export const AdminBlogPage: React.FC = () => {
   });
 
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const blogFileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const handleBlogImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingImage(true);
+    try {
+      const compressedUrl = await DataService.uploadImageFile(file, 'blog');
+      setFormData((prev) => ({ ...prev, featured_image_path: compressedUrl }));
+    } catch (err) {
+      console.error(err);
+      alert('Failed to process image file.');
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
 
   useEffect(() => {
     loadBlogs();
@@ -295,14 +312,31 @@ Write your discipleship message or mission report here...
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700">Featured Image URL</label>
-                    <input
-                      type="text"
-                      value={formData.featured_image_path}
-                      onChange={(e) => setFormData({ ...formData, featured_image_path: e.target.value })}
-                      placeholder="https://..."
-                      className="w-full px-3 py-2 rounded-lg border text-xs"
-                    />
+                    <label className="text-xs font-bold text-slate-700">Featured Article Image</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="file"
+                        ref={blogFileInputRef}
+                        accept="image/*"
+                        onChange={handleBlogImageFileChange}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        disabled={isUploadingImage}
+                        onClick={() => blogFileInputRef.current?.click()}
+                        className="px-2.5 py-1.5 rounded-lg bg-emerald-800 text-amber-300 font-semibold text-xs hover:bg-emerald-700 transition-colors shrink-0 cursor-pointer disabled:opacity-50"
+                      >
+                        {isUploadingImage ? 'Optimizing...' : '📁 Choose Image'}
+                      </button>
+                      <input
+                        type="text"
+                        value={formData.featured_image_path}
+                        onChange={(e) => setFormData({ ...formData, featured_image_path: e.target.value })}
+                        placeholder="https://... or chosen image"
+                        className="w-full px-3 py-1.5 rounded-lg border text-xs"
+                      />
+                    </div>
                   </div>
                 </div>
 

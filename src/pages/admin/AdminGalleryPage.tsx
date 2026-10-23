@@ -19,7 +19,28 @@ export const AdminGalleryPage: React.FC = () => {
   });
 
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      const compressedUrl = await DataService.uploadImageFile(file, 'gallery');
+      setFormData((prev) => ({
+        ...prev,
+        storage_path: compressedUrl,
+        title: prev.title.trim() ? prev.title : file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '),
+      }));
+    } catch (err) {
+      console.error(err);
+      alert('Failed to process image file.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   useEffect(() => {
     loadGallery();
@@ -200,16 +221,48 @@ export const AdminGalleryPage: React.FC = () => {
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Image URL / Storage Path *</label>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700">Outreach Photograph *</label>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/*"
+                    onChange={handleImageFileChange}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    disabled={isUploading}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-3.5 py-2 rounded-lg bg-emerald-800 text-amber-300 font-semibold text-xs hover:bg-emerald-700 transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <span>📁 Choose Image File</span>
+                  </button>
+                  <span className="text-[11px] text-slate-400 text-center sm:text-left">or enter image URL below</span>
+                </div>
+                {isUploading && (
+                  <p className="text-[11px] text-amber-600 font-medium animate-pulse">
+                    Compressing and optimizing photo for instant cloud publishing...
+                  </p>
+                )}
                 <input
                   type="text"
                   required
                   value={formData.storage_path}
                   onChange={(e) => setFormData({ ...formData, storage_path: e.target.value })}
-                  placeholder="https://... or supabase bucket path"
+                  placeholder="https://... or uploaded image"
                   className="w-full px-3 py-2 rounded-lg border text-xs"
                 />
+                {formData.storage_path && (
+                  <div className="w-24 h-16 rounded-lg overflow-hidden border border-slate-200 mt-1">
+                    <img
+                      src={formData.storage_path}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
