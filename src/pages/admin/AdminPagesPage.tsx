@@ -7,6 +7,7 @@ import {
   CustomPageSection,
   CustomPageSlide,
 } from '../../types';
+import { moveSlide, sanitizeSlides } from '../../utils/slideHelper';
 
 export const AdminPagesPage: React.FC = () => {
   const [pages, setPages] = useState<CustomPage[]>([]);
@@ -41,6 +42,7 @@ export const AdminPagesPage: React.FC = () => {
   // Image upload states
   const [isUploadingHero, setIsUploadingHero] = useState(false);
   const [isUploadingSlide, setIsUploadingSlide] = useState(false);
+  const [uploadingSlideIndex, setUploadingSlideIndex] = useState<number | null>(null);
   const [isUploadingGallery, setIsUploadingGallery] = useState(false);
 
   const [isSaving, setIsSaving] = useState(false);
@@ -219,18 +221,41 @@ export const AdminPagesPage: React.FC = () => {
       slides: [
         ...prev.slides,
         {
-          id: `sl-${Date.now()}`,
+          id: `sl-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           image_url: 'https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?auto=format&fit=crop&w=1200&q=80',
-          title: 'Slide Title',
-          caption: 'Slide caption or scripture quotation',
+          title: '',
+          caption: '',
         },
       ],
+    }));
+  };
+
+  const handleDuplicateSlide = (index: number) => {
+    setFormData((prev) => {
+      const target = prev.slides[index];
+      if (!target) return prev;
+      const duplicated: CustomPageSlide = {
+        ...target,
+        id: `sl-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        title: target.title ? `${target.title} (Copy)` : '',
+      };
+      const updated = [...prev.slides];
+      updated.splice(index + 1, 0, duplicated);
+      return { ...prev, slides: updated };
+    });
+  };
+
+  const handleMoveSlide = (index: number, direction: 'up' | 'down') => {
+    setFormData((prev) => ({
+      ...prev,
+      slides: moveSlide(prev.slides, index, direction),
     }));
   };
 
   const handleUpdateSlide = (index: number, field: keyof CustomPageSlide, value: string) => {
     setFormData((prev) => {
       const updated = [...prev.slides];
+      if (!updated[index]) return prev;
       updated[index] = { ...updated[index], [field]: value };
       return { ...prev, slides: updated };
     });
@@ -243,19 +268,21 @@ export const AdminPagesPage: React.FC = () => {
     }));
   };
 
-  // Slide image upload
+  // Slide image upload with active index tracking
   const handleSlideImageUpload = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setIsUploadingSlide(true);
+    setUploadingSlideIndex(index);
     try {
       const url = await DataService.uploadImageFile(file, 'page-slides');
       handleUpdateSlide(index, 'image_url', url);
     } catch (err) {
-      console.error(err);
-      alert('Failed to upload slide image.');
+      console.error('Slide image upload error:', err);
+      alert('Failed to process slide image. Please try another image.');
     } finally {
       setIsUploadingSlide(false);
+      setUploadingSlideIndex(null);
     }
   };
 
@@ -266,9 +293,9 @@ export const AdminPagesPage: React.FC = () => {
       gallery: [
         ...prev.gallery,
         {
-          id: `g-${Date.now()}`,
+          id: `g-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           image_url: 'https://images.unsplash.com/photo-1529070538774-1843cb3265df?auto=format&fit=crop&w=800&q=80',
-          caption: 'Photo description or village outreach event',
+          caption: '',
         },
       ],
     }));
@@ -277,6 +304,7 @@ export const AdminPagesPage: React.FC = () => {
   const handleUpdateGallery = (index: number, field: keyof CustomPageGalleryItem, value: string) => {
     setFormData((prev) => {
       const updated = [...prev.gallery];
+      if (!updated[index]) return prev;
       updated[index] = { ...updated[index], [field]: value };
       return { ...prev, gallery: updated };
     });
@@ -315,9 +343,14 @@ export const AdminPagesPage: React.FC = () => {
       alert('Please enter a URL slug for the page.');
       return;
     }
+    if (isUploadingSlide || isUploadingHero || isUploadingGallery || isUploadingAudio) {
+      alert('Please wait for photo or audio uploads to finish compressing before saving.');
+      return;
+    }
 
     setIsSaving(true);
     try {
+      const cleanedSlides = sanitizeSlides(formData.slides);
       await DataService.saveCustomPage({
         id: editingItem?.id,
         title: formData.title.trim(),
@@ -326,7 +359,7 @@ export const AdminPagesPage: React.FC = () => {
         hero_image: formData.hero_image.trim(),
         content: formData.content.trim(),
         sections: formData.sections,
-        slides: formData.slides,
+        slides: cleanedSlides,
         gallery: formData.gallery,
         audio_title: formData.audio_title.trim(),
         audio_speaker: formData.audio_speaker.trim(),
@@ -334,12 +367,17 @@ export const AdminPagesPage: React.FC = () => {
         audio_file_id: formData.audio_file_id,
         audio_duration: formData.audio_duration,
         published: formData.published,
+        created_at: editingItem?.created_at,
       });
 
       setIsSaving(false);
       setIsModalOpen(false);
-      setMessage(editingItem ? 'Custom page updated!' : 'New custom page created successfully!');
-      setTimeout(() => setMessage(null), 3000);
+      setMessage(
+        editingItem
+          ? `Custom page updated! All ${cleanedSlides.length} slides published live.`
+          : `New custom page created! All ${cleanedSlides.length} slides published live.`
+      );
+      setTimeout(() => setMessage(null), 4000);
       await loadPages();
     } catch (err) {
       console.error('Error saving custom page:', err);
@@ -758,57 +796,119 @@ export const AdminPagesPage: React.FC = () => {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                        Interactive Slideshow ({formData.slides.length} slides)
+                      <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                        <span>Interactive Slideshow</span>
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-[#1b4332] text-[10px] font-bold">
+                          {formData.slides.length} {formData.slides.length === 1 ? 'Slide' : 'Slides'}
+                        </span>
                       </h4>
                       <p className="text-[11px] text-slate-500">
-                        Add photo slides with titles and captions to showcase highlighted themes.
+                        Add photo slides with titles and captions. All added slides are saved and published directly to the public page.
                       </p>
                     </div>
                     <button
                       type="button"
                       onClick={handleAddSlide}
-                      className="px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-lg hover:bg-emerald-100 cursor-pointer"
+                      className="px-3.5 py-1.5 bg-[#1b4332] text-amber-300 border border-emerald-800 text-xs font-bold rounded-lg hover:bg-emerald-800 transition-colors shadow-sm cursor-pointer flex items-center gap-1.5"
                     >
-                      + Add Slide
+                      <span>+ Add Slide</span>
                     </button>
                   </div>
 
                   {formData.slides.length === 0 ? (
-                    <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-300 space-y-2">
-                      <p className="text-xs text-slate-500">No slides added yet.</p>
+                    <div className="text-center py-10 bg-slate-50 rounded-xl border-2 border-dashed border-slate-300 space-y-3">
+                      <div className="w-10 h-10 rounded-full bg-emerald-100 text-[#1b4332] flex items-center justify-center mx-auto text-lg">
+                        🖼️
+                      </div>
+                      <p className="text-xs font-semibold text-slate-600">No slides added yet to this page.</p>
                       <button
                         type="button"
                         onClick={handleAddSlide}
-                        className="px-3 py-1.5 bg-[#1b4332] text-amber-300 text-xs font-bold rounded-lg hover:bg-emerald-800 cursor-pointer"
+                        className="px-4 py-2 bg-[#1b4332] text-amber-300 text-xs font-bold rounded-lg hover:bg-emerald-800 cursor-pointer shadow"
                       >
-                        Add First Slide
+                        + Add First Slide
                       </button>
                     </div>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-3.5">
                       {formData.slides.map((slide, idx) => (
-                        <div key={slide.id || idx} className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-700">Slide #{idx + 1}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveSlide(idx)}
-                              className="text-xs text-red-500 hover:text-red-700 cursor-pointer"
-                            >
-                              Remove Slide
-                            </button>
-                          </div>
-
-                          <div className="flex items-start gap-3">
-                            <div className="w-20 h-14 rounded-lg overflow-hidden bg-slate-200 border border-slate-300 shrink-0">
-                              <img src={slide.image_url} alt="Slide preview" className="w-full h-full object-cover" />
+                        <div key={slide.id || idx} className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 shadow-xs">
+                          {/* Slide header with ordering and duplicate controls */}
+                          <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-emerald-950 bg-emerald-100/80 px-2 py-0.5 rounded border border-emerald-200">
+                                Slide #{idx + 1} of {formData.slides.length}
+                              </span>
+                              {uploadingSlideIndex === idx && (
+                                <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded animate-pulse">
+                                  ⏳ Compressing & attaching...
+                                </span>
+                              )}
                             </div>
 
-                            <div className="flex-1 space-y-2">
-                              <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 text-xs">
+                              {/* Move Up */}
+                              <button
+                                type="button"
+                                disabled={idx === 0}
+                                onClick={() => handleMoveSlide(idx, 'up')}
+                                title="Move slide up"
+                                className="px-2 py-0.5 rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                              >
+                                ▲ Up
+                              </button>
+                              {/* Move Down */}
+                              <button
+                                type="button"
+                                disabled={idx === formData.slides.length - 1}
+                                onClick={() => handleMoveSlide(idx, 'down')}
+                                title="Move slide down"
+                                className="px-2 py-0.5 rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                              >
+                                ▼ Down
+                              </button>
+                              {/* Duplicate Slide */}
+                              <button
+                                type="button"
+                                onClick={() => handleDuplicateSlide(idx)}
+                                title="Duplicate this slide"
+                                className="px-2 py-0.5 rounded bg-white border border-slate-300 text-emerald-900 hover:bg-emerald-50 cursor-pointer"
+                              >
+                                📋 Duplicate
+                              </button>
+                              {/* Remove Slide */}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveSlide(idx)}
+                                title="Delete this slide"
+                                className="px-2 py-0.5 rounded text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 cursor-pointer"
+                              >
+                                ✕ Remove
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row items-start gap-3.5">
+                            {/* Slide image preview */}
+                            <div className="w-full sm:w-28 h-20 rounded-lg overflow-hidden bg-slate-900 border border-slate-300 shrink-0 relative group">
+                              {slide.image_url ? (
+                                <img
+                                  src={slide.image_url}
+                                  alt={slide.title || `Slide ${idx + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">
+                                  No Image
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex-1 space-y-2.5 w-full">
+                              {/* Image upload row */}
+                              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
                                 <label className="text-[11px] font-semibold text-slate-600 shrink-0">
-                                  Image:
+                                  Slide Image:
                                 </label>
                                 <input
                                   type="file"
@@ -820,38 +920,60 @@ export const AdminPagesPage: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => document.getElementById(`slide-file-${idx}`)?.click()}
-                                  className="px-2.5 py-1 text-[11px] font-semibold rounded bg-white border border-slate-300 hover:bg-slate-100 cursor-pointer"
+                                  disabled={uploadingSlideIndex === idx}
+                                  className="px-2.5 py-1 text-[11px] font-semibold rounded bg-white border border-slate-300 hover:bg-slate-100 cursor-pointer shrink-0 disabled:opacity-50"
                                 >
-                                  {isUploadingSlide ? 'Uploading...' : '📁 Choose File'}
+                                  {uploadingSlideIndex === idx ? 'Compressing...' : '📁 Choose File from Computer'}
                                 </button>
                                 <input
                                   type="text"
                                   value={slide.image_url}
                                   onChange={(e) => handleUpdateSlide(idx, 'image_url', e.target.value)}
-                                  placeholder="Or image URL..."
-                                  className="flex-1 px-2.5 py-1 rounded border text-xs bg-white"
+                                  placeholder="Or paste direct image URL (Unsplash, etc.)..."
+                                  className="flex-1 min-w-[200px] px-2.5 py-1 rounded border text-xs bg-white"
                                 />
                               </div>
 
-                              <input
-                                type="text"
-                                value={slide.title || ''}
-                                onChange={(e) => handleUpdateSlide(idx, 'title', e.target.value)}
-                                placeholder="Slide Title (e.g. Frontier Evangelism Fellowship)"
-                                className="w-full px-2.5 py-1 rounded border text-xs bg-white font-medium"
-                              />
+                              {/* Title */}
+                              <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase block mb-0.5">
+                                  Slide Heading / Title
+                                </label>
+                                <input
+                                  type="text"
+                                  value={slide.title || ''}
+                                  onChange={(e) => handleUpdateSlide(idx, 'title', e.target.value)}
+                                  placeholder="e.g. Village Discipleship Gathering / Frontier Outreach"
+                                  className="w-full px-2.5 py-1.5 rounded border text-xs bg-white font-medium"
+                                />
+                              </div>
 
-                              <input
-                                type="text"
-                                value={slide.caption || ''}
-                                onChange={(e) => handleUpdateSlide(idx, 'caption', e.target.value)}
-                                placeholder="Slide Caption / Scripture reference"
-                                className="w-full px-2.5 py-1 rounded border text-xs bg-white"
-                              />
+                              {/* Caption */}
+                              <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase block mb-0.5">
+                                  Slide Caption / Scripture Reference
+                                </label>
+                                <input
+                                  type="text"
+                                  value={slide.caption || ''}
+                                  onChange={(e) => handleUpdateSlide(idx, 'caption', e.target.value)}
+                                  placeholder="e.g. Believers assembling for open-air biblical training and prayer."
+                                  className="w-full px-2.5 py-1.5 rounded border text-xs bg-white"
+                                />
+                              </div>
                             </div>
                           </div>
                         </div>
                       ))}
+
+                      {/* Convenient Add Slide bottom button */}
+                      <button
+                        type="button"
+                        onClick={handleAddSlide}
+                        className="w-full py-2 border-2 border-dashed border-emerald-800/30 hover:border-emerald-800 rounded-xl text-xs font-bold text-[#1b4332] bg-emerald-50/50 hover:bg-emerald-50 transition-colors cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        <span>+ Add Another Slide ({formData.slides.length} currently)</span>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1097,10 +1219,20 @@ export const AdminPagesPage: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    disabled={isSaving || isUploadingAudio}
-                    className="px-6 py-2 text-xs font-bold text-amber-300 bg-[#1b4332] rounded-lg hover:bg-emerald-800 disabled:opacity-50 shadow cursor-pointer"
+                    disabled={isSaving || isUploadingAudio || isUploadingSlide || isUploadingHero || isUploadingGallery}
+                    className="px-6 py-2.5 text-xs font-bold text-amber-300 bg-[#1b4332] rounded-lg hover:bg-emerald-800 disabled:opacity-50 shadow cursor-pointer transition-colors"
                   >
-                    {isSaving ? 'Saving Page...' : 'Save & Publish Page'}
+                    {isSaving
+                      ? 'Saving & Publishing Live...'
+                      : isUploadingSlide
+                      ? 'Compressing Slide Image...'
+                      : isUploadingHero
+                      ? 'Uploading Hero Banner...'
+                      : isUploadingGallery
+                      ? 'Uploading Gallery Photo...'
+                      : isUploadingAudio
+                      ? 'Processing Audio...'
+                      : 'Save & Publish Page'}
                   </button>
                 </div>
               </div>

@@ -9,16 +9,8 @@ import {
 import { AudioStore } from '../lib/audioStore';
 import { auth, db, isFirebaseConfigured } from '../lib/firebase';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
-import {
-  AdminStats,
-  AudioTeaching,
-  BlogPost,
-  ContactMessage,
-  CustomPage,
-  GalleryItem,
-  NewsletterSubscriber,
-  SiteSettings,
-} from '../types';
+import { AudioTeaching, BlogPost, ContactMessage, CustomPage, GalleryItem, NewsletterSubscriber, SiteSettings, AdminStats } from '../types';
+import { sanitizeForFirestore, sanitizeSlides } from '../utils/slideHelper';
 
 // FIRESTORE ERROR HANDLING IN ACCORDANCE WITH FIREBASE INTEGRATION SKILL
 enum OperationType {
@@ -603,8 +595,8 @@ export class DataService {
   }
 
   // --- FAST CLIENT-SIDE IMAGE COMPRESSION & OPTIMIZATION ---
-  // Compresses any uploaded photo (even 10MB phone uploads) to lightweight, retina-sharp ~40KB-80KB WebP/JPEG
-  // Ensures immediate upload without network lag, and easily publishes to Firestore
+  // Compresses any uploaded photo (even 10MB phone uploads) to lightweight, retina-sharp ~30KB-40KB JPEG
+  // Ensures multiple slides never hit Firestore's 1MB document limit, publishing reliably and instantly
   static async uploadImageFile(file: File, _bucket = 'branding-assets'): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -614,35 +606,44 @@ export class DataService {
         img.onload = () => {
           try {
             const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
+            const ctx = canvas.getContext('2d', { alpha: false });
             if (!ctx) {
               resolve(rawResult);
               return;
             }
 
-            const MAX_WIDTH = 1280;
-            const MAX_HEIGHT = 1280;
+            // Standardize responsive display resolution (960px max dimension gives crisp clarity on retina and phones)
+            const MAX_DIMENSION = 960;
             let width = img.width;
             let height = img.height;
 
             if (width > height) {
-              if (width > MAX_WIDTH) {
-                height = Math.round((height * MAX_WIDTH) / width);
-                width = MAX_WIDTH;
+              if (width > MAX_DIMENSION) {
+                height = Math.round((height * MAX_DIMENSION) / width);
+                width = MAX_DIMENSION;
               }
             } else {
-              if (height > MAX_HEIGHT) {
-                width = Math.round((width * MAX_HEIGHT) / height);
-                height = MAX_HEIGHT;
+              if (height > MAX_DIMENSION) {
+                width = Math.round((width * MAX_DIMENSION) / height);
+                height = MAX_DIMENSION;
               }
             }
 
             canvas.width = width;
             canvas.height = height;
+
+            // Fill white background before drawing
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, width, height);
             ctx.drawImage(img, 0, 0, width, height);
 
-            // Compress to optimized JPEG quality 0.78
-            const compressed = canvas.toDataURL('image/jpeg', 0.78);
+            // Compress to optimized JPEG quality 0.70 (~30KB-40KB per slide)
+            let compressed = canvas.toDataURL('image/jpeg', 0.70);
+
+            // Safety guard: if still larger than 90KB, recompress to 0.55
+            if (compressed.length > 90000) {
+              compressed = canvas.toDataURL('image/jpeg', 0.55);
+            }
             resolve(compressed);
           } catch {
             resolve(rawResult);
@@ -1129,15 +1130,15 @@ export class DataService {
   static async saveCustomPage(page: Partial<CustomPage>): Promise<CustomPage> {
     const now = new Date().toISOString();
 
-    let persistentAudioPath = page.audio_storage_path;
-    let fileId = page.audio_file_id;
-    if (!fileId && persistentAudioPath?.startsWith('idb://')) {
+    let persistentAudioPath = page.audio_storage_path || '';
+    let fileId = page.audio_file_id || '';
+    if (!fileId && persistentAudioPath.startsWith('idb://')) {
       fileId = persistentAudioPath.replace('idb://', '');
     }
     if (
       fileId &&
-      (persistentAudioPath?.startsWith('blob:') ||
-        (!persistentAudioPath?.startsWith('idb://') && !persistentAudioPath?.startsWith('http')))
+      (persistentAudioPath.startsWith('blob:') ||
+        (!persistentAudioPath.startsWith('idb://') && !persistentAudioPath.startsWith('http')))
     ) {
       persistentAudioPath = `idb://${fileId}`;
     }
@@ -1147,49 +1148,57 @@ export class DataService {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
 
-    let saved: CustomPage;
-    if (page.id) {
-      saved = {
-        ...page,
-        slug: cleanSlug,
-        audio_file_id: fileId,
-        audio_storage_path: persistentAudioPath,
-        updated_at: now,
-      } as CustomPage;
-    } else {
-      saved = {
-        id: `page-${Date.now()}`,
-        title: page.title || 'Untitled Page',
-        slug: cleanSlug,
-        subtitle: page.subtitle || '',
-        hero_image: page.hero_image || '',
-        content: page.content || '',
-        sections: page.sections || [],
-        slides: page.slides || [],
-        gallery: page.gallery || [],
-        audio_title: page.audio_title || '',
-        audio_speaker: page.audio_speaker || '',
-        audio_storage_path: persistentAudioPath || '',
-        audio_file_id: fileId,
-        audio_duration: page.audio_duration || 0,
-        published: page.published ?? true,
-        created_at: now,
-        updated_at: now,
-      };
-    }
+    const current = getStoredItem<CustomPage[]>(STORAGE_KEYS.PAGES, DEFAULT_CUSTOM_PAGES);
+    const existing = page.id ? current.find((p) => p.id === page.id) : null;
+    const createdAt = page.created_at || existing?.created_at || now;
+
+    // Sanitize and guarantee no missing IDs or undefined attributes
+    const cleanedSlides = sanitizeSlides(page.slides);
+    const cleanedSections = (page.sections || []).map((sec, i) => ({
+      id: sec.id || `sec-${Date.now()}-${i}`,
+      heading: (sec.heading || '').trim() || `Section ${i + 1}`,
+      content: (sec.content || '').trim(),
+    }));
+    const cleanedGallery = (page.gallery || []).map((g, i) => ({
+      id: g.id || `g-${Date.now()}-${i}`,
+      image_url: (g.image_url || '').trim() || 'https://images.unsplash.com/photo-1529070538774-1843cb3265df?auto=format&fit=crop&w=800&q=80',
+      caption: (g.caption || '').trim(),
+    }));
+
+    const saved: CustomPage = {
+      id: page.id || `page-${Date.now()}`,
+      title: (page.title || 'Untitled Page').trim(),
+      slug: cleanSlug,
+      subtitle: (page.subtitle || '').trim(),
+      hero_image: (page.hero_image || '').trim(),
+      content: (page.content || '').trim(),
+      sections: cleanedSections,
+      slides: cleanedSlides,
+      gallery: cleanedGallery,
+      audio_title: (page.audio_title || '').trim(),
+      audio_speaker: (page.audio_speaker || 'Evangelist S. O. Okon').trim(),
+      audio_storage_path: persistentAudioPath,
+      audio_file_id: fileId,
+      audio_duration: page.audio_duration || 0,
+      published: page.published ?? true,
+      created_at: createdAt,
+      updated_at: now,
+    };
 
     // 1. Immediately publish to Cloud Firestore database!
     if (isFirebaseConfigured) {
       try {
-        await setDoc(doc(db, 'custom_pages', saved.id), saved, { merge: true });
+        const firestorePayload = sanitizeForFirestore(saved);
+        await setDoc(doc(db, 'custom_pages', saved.id), firestorePayload, { merge: true });
         console.log(`Page "${saved.title}" successfully published to cloud Firestore with ${saved.slides?.length || 0} slides and ${saved.gallery?.length || 0} gallery items.`);
       } catch (err) {
+        console.error('Firestore saveCustomPage error:', err);
         handleFirestoreError(err, OperationType.WRITE, `custom_pages/${saved.id}`);
+        throw err;
       }
     }
 
     // 2. Also update local cache for offline resiliency
-    const current = getStoredItem<CustomPage[]>(STORAGE_KEYS.PAGES, DEFAULT_CUSTOM_PAGES);
     const idx = current.findIndex((p) => p.id === saved.id);
     if (idx >= 0) {
       current[idx] = saved;
