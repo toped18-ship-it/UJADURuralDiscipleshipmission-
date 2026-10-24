@@ -14,7 +14,6 @@ export const CustomPageDetail: React.FC = () => {
   const [activeLightbox, setActiveLightbox] = useState<CustomPageGalleryItem | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  const [isAutoPlaying, setIsAutoPlaying] = useState(true);
   const [activeSlideFullscreen, setActiveSlideFullscreen] = useState<boolean>(false);
 
   const { currentTrack, isPlaying, playTrack, downloadAudio } = useAudio();
@@ -29,14 +28,18 @@ export const CustomPageDetail: React.FC = () => {
     });
   }, [slug]);
 
-  // Slideshow auto-advance
+  // Slideshow auto-advance based on admin configuration
   useEffect(() => {
-    if (!page?.slides || page.slides.length <= 1 || !isAutoPlaying) return;
+    if (!page?.slides || page.slides.length <= 1) return;
+    const isAutoPlay = page.auto_play_slides !== false;
+    if (!isAutoPlay) return;
+
+    const intervalMs = (page.slide_interval_seconds || 5) * 1000;
     const interval = setInterval(() => {
       setActiveSlideIndex((prev) => (prev + 1) % page.slides!.length);
-    }, 5000);
+    }, intervalMs);
     return () => clearInterval(interval);
-  }, [page?.slides, isAutoPlaying]);
+  }, [page?.slides, page?.auto_play_slides, page?.slide_interval_seconds]);
 
   const handlePrevSlide = () => {
     if (!page?.slides || page.slides.length === 0) return;
@@ -178,46 +181,29 @@ export const CustomPageDetail: React.FC = () => {
                 </h2>
               </div>
 
-              <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setIsAutoPlaying((prev) => !prev)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors flex items-center gap-1.5 cursor-pointer ${
-                    isAutoPlaying
-                      ? 'bg-emerald-900 text-amber-300 border-amber-400/40 hover:bg-emerald-800'
-                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
-                  }`}
+                  onClick={handlePrevSlide}
+                  aria-label="Previous slide"
+                  className="w-9 h-9 rounded-full bg-white border border-slate-300 hover:bg-emerald-900 hover:text-amber-300 hover:border-emerald-800 flex items-center justify-center text-slate-800 font-bold text-lg transition-colors shadow-sm cursor-pointer"
                 >
-                  {isAutoPlaying ? '⏸ Pause Auto-Slide' : '▶ Auto-Play Slides'}
+                  ‹
                 </button>
-
                 <button
-                  onClick={() => setActiveSlideFullscreen(true)}
-                  className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold text-xs shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer"
+                  onClick={handleNextSlide}
+                  aria-label="Next slide"
+                  className="w-9 h-9 rounded-full bg-white border border-slate-300 hover:bg-emerald-900 hover:text-amber-300 hover:border-emerald-800 flex items-center justify-center text-slate-800 font-bold text-lg transition-colors shadow-sm cursor-pointer"
                 >
-                  <span>🔍 Expand Fullscreen</span>
+                  ›
                 </button>
-
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={handlePrevSlide}
-                    aria-label="Previous slide"
-                    className="w-9 h-9 rounded-full bg-white border border-slate-300 hover:bg-emerald-900 hover:text-amber-300 hover:border-emerald-800 flex items-center justify-center text-slate-800 font-bold text-lg transition-colors shadow-sm cursor-pointer"
-                  >
-                    ‹
-                  </button>
-                  <button
-                    onClick={handleNextSlide}
-                    aria-label="Next slide"
-                    className="w-9 h-9 rounded-full bg-white border border-slate-300 hover:bg-emerald-900 hover:text-amber-300 hover:border-emerald-800 flex items-center justify-center text-slate-800 font-bold text-lg transition-colors shadow-sm cursor-pointer"
-                  >
-                    ›
-                  </button>
-                </div>
               </div>
             </div>
 
-            {/* ENLARGED SLIDE VIEWPORT */}
-            <div className="relative w-full rounded-2xl overflow-hidden bg-slate-950 shadow-2xl border border-slate-800 min-h-[440px] sm:min-h-[540px] lg:min-h-[620px] aspect-[16/9] sm:aspect-[21/9] lg:aspect-[2.4/1] group">
+            {/* ENLARGED SLIDE VIEWPORT - CLICKING SLIDE OPENS FULLSCREEN */}
+            <div
+              onClick={() => setActiveSlideFullscreen(true)}
+              className="relative w-full rounded-2xl overflow-hidden bg-slate-950 shadow-2xl border border-slate-800 min-h-[440px] sm:min-h-[540px] lg:min-h-[620px] aspect-[16/9] sm:aspect-[21/9] lg:aspect-[2.4/1] group cursor-pointer"
+            >
               {page.slides.map((slide, idx) => (
                 <div
                   key={slide.id || idx}
@@ -253,7 +239,10 @@ export const CustomPageDetail: React.FC = () => {
 
               {/* OVERLAY NAVIGATION ARROWS */}
               <button
-                onClick={handlePrevSlide}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePrevSlide();
+                }}
                 aria-label="Previous slide"
                 className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-slate-950/70 hover:bg-slate-950 text-white hover:text-amber-300 border border-white/20 flex items-center justify-center text-2xl font-bold transition-all shadow-xl backdrop-blur-sm cursor-pointer opacity-90 hover:opacity-100 hover:scale-110"
               >
@@ -261,19 +250,14 @@ export const CustomPageDetail: React.FC = () => {
               </button>
 
               <button
-                onClick={handleNextSlide}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleNextSlide();
+                }}
                 aria-label="Next slide"
                 className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-slate-950/70 hover:bg-slate-950 text-white hover:text-amber-300 border border-white/20 flex items-center justify-center text-2xl font-bold transition-all shadow-xl backdrop-blur-sm cursor-pointer opacity-90 hover:opacity-100 hover:scale-110"
               >
                 ›
-              </button>
-
-              {/* TOP RIGHT EXPAND BUTTON */}
-              <button
-                onClick={() => setActiveSlideFullscreen(true)}
-                className="absolute top-4 right-4 z-20 px-3 py-1.5 rounded-lg bg-slate-950/80 hover:bg-slate-900 text-amber-300 border border-amber-400/30 text-xs font-semibold backdrop-blur-sm transition-all cursor-pointer flex items-center gap-1.5 shadow"
-              >
-                <span>🔍 Full Screen</span>
               </button>
 
               {/* SLIDE INDICATOR DOTS */}

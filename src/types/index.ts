@@ -123,6 +123,8 @@ export interface CustomPage {
   content: string;
   sections?: CustomPageSection[];
   slides?: CustomPageSlide[];
+  auto_play_slides?: boolean;
+  slide_interval_seconds?: number;
   gallery?: CustomPageGalleryItem[];
   audio_title?: string;
   audio_speaker?: string;

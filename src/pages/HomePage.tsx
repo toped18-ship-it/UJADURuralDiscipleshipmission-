@@ -13,8 +13,6 @@ export const HomePage: React.FC = () => {
   const [recentGallery, setRecentGallery] = useState<GalleryItem[]>([]);
   const [activeLightbox, setActiveLightbox] = useState<GalleryItem | null>(null);
   const [activeGallerySlideIndex, setActiveGallerySlideIndex] = useState<number>(0);
-  const [isGalleryAutoPlaying, setIsGalleryAutoPlaying] = useState<boolean>(true);
-  const [galleryViewMode, setGalleryViewMode] = useState<'slide' | 'grid'>('slide');
 
   const { currentTrack, isPlaying, playTrack, downloadAudio } = useAudio();
 
@@ -27,12 +25,12 @@ export const HomePage: React.FC = () => {
 
   // Homepage photo slide auto-advance
   useEffect(() => {
-    if (!recentGallery || recentGallery.length <= 1 || !isGalleryAutoPlaying || galleryViewMode !== 'slide') return;
+    if (!recentGallery || recentGallery.length <= 1) return;
     const interval = setInterval(() => {
       setActiveGallerySlideIndex((prev) => (prev + 1) % recentGallery.length);
     }, 5000);
     return () => clearInterval(interval);
-  }, [recentGallery, isGalleryAutoPlaying, galleryViewMode]);
+  }, [recentGallery]);
 
   const handlePrevGallerySlide = () => {
     if (!recentGallery || recentGallery.length === 0) return;
@@ -319,49 +317,12 @@ export const HomePage: React.FC = () => {
             <h2 className="text-3xl font-serif font-bold text-slate-900 mt-1">Featured Mission Photo Slides</h2>
           </div>
 
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* View Mode Switcher */}
-            <div className="bg-slate-200/80 p-1 rounded-xl flex items-center gap-1 border border-slate-300/80 text-xs font-medium">
-              <button
-                onClick={() => setGalleryViewMode('slide')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  galleryViewMode === 'slide'
-                    ? 'bg-white text-emerald-950 font-bold shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                📸 Large Slide
-              </button>
-              <button
-                onClick={() => setGalleryViewMode('grid')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  galleryViewMode === 'grid'
-                    ? 'bg-white text-emerald-950 font-bold shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                📱 Grid
-              </button>
-            </div>
-
-            {galleryViewMode === 'slide' && (
-              <button
-                onClick={() => setIsGalleryAutoPlaying((prev) => !prev)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors flex items-center gap-1.5 cursor-pointer ${
-                  isGalleryAutoPlaying
-                    ? 'bg-emerald-900 text-amber-300 border-amber-400/40 hover:bg-emerald-800'
-                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
-                }`}
-              >
-                {isGalleryAutoPlaying ? '⏸ Pause' : '▶ Auto-Play'}
-              </button>
-            )}
-
+          <div className="flex items-center gap-3">
             <Link
               to="/gallery"
-              className="text-xs font-semibold text-emerald-900 hover:text-amber-600 flex items-center gap-1 shrink-0 ml-1"
+              className="text-xs font-semibold text-emerald-900 hover:text-amber-600 flex items-center gap-1 shrink-0"
             >
-              <span>View All ({recentGallery.length}+)</span>
+              <span>View Full Gallery ({recentGallery.length}+)</span>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
               </svg>
@@ -369,11 +330,14 @@ export const HomePage: React.FC = () => {
           </div>
         </div>
 
-        {/* PHOTO SLIDE MODE */}
-        {galleryViewMode === 'slide' && recentGallery.length > 0 && (
+        {/* PHOTO SLIDE SHOWCASE */}
+        {recentGallery.length > 0 && (
           <div className="space-y-4">
-            {/* ENLARGED SLIDE SHOWCASE CANVAS */}
-            <div className="relative w-full rounded-2xl overflow-hidden bg-slate-950 shadow-2xl border border-slate-800 min-h-[460px] sm:min-h-[560px] lg:min-h-[620px] aspect-[16/9] sm:aspect-[21/9] lg:aspect-[2.4/1] group">
+            {/* ENLARGED SLIDE SHOWCASE CANVAS - CLICKING OPENS LIGHTBOX */}
+            <div
+              onClick={() => setActiveLightbox(recentGallery[activeGallerySlideIndex])}
+              className="relative w-full rounded-2xl overflow-hidden bg-slate-950 shadow-2xl border border-slate-800 min-h-[460px] sm:min-h-[560px] lg:min-h-[620px] aspect-[16/9] sm:aspect-[21/9] lg:aspect-[2.4/1] group cursor-pointer"
+            >
               {recentGallery.map((item, idx) => (
                 <div
                   key={item.id || idx}
@@ -415,7 +379,10 @@ export const HomePage: React.FC = () => {
 
               {/* OVERLAY NAVIGATION ARROWS */}
               <button
-                onClick={handlePrevGallerySlide}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePrevGallerySlide();
+                }}
                 aria-label="Previous slide"
                 className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-slate-950/70 hover:bg-slate-950 text-white hover:text-amber-300 border border-white/20 flex items-center justify-center text-2xl font-bold transition-all shadow-xl backdrop-blur-sm cursor-pointer opacity-90 hover:opacity-100 hover:scale-110"
               >
@@ -423,19 +390,14 @@ export const HomePage: React.FC = () => {
               </button>
 
               <button
-                onClick={handleNextGallerySlide}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleNextGallerySlide();
+                }}
                 aria-label="Next slide"
                 className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-slate-950/70 hover:bg-slate-950 text-white hover:text-amber-300 border border-white/20 flex items-center justify-center text-2xl font-bold transition-all shadow-xl backdrop-blur-sm cursor-pointer opacity-90 hover:opacity-100 hover:scale-110"
               >
                 ›
-              </button>
-
-              {/* TOP RIGHT FULLSCREEN BUTTON */}
-              <button
-                onClick={() => setActiveLightbox(recentGallery[activeGallerySlideIndex])}
-                className="absolute top-4 right-4 z-20 px-3 py-1.5 rounded-lg bg-slate-950/80 hover:bg-slate-900 text-amber-300 border border-amber-400/30 text-xs font-semibold backdrop-blur-sm transition-all cursor-pointer flex items-center gap-1.5 shadow"
-              >
-                <span>🔍 Enlarge Photo</span>
               </button>
 
               {/* SLIDE INDICATOR DOTS */}
@@ -478,33 +440,6 @@ export const HomePage: React.FC = () => {
                 </button>
               ))}
             </div>
-          </div>
-        )}
-
-        {/* GRID VIEW MODE */}
-        {galleryViewMode === 'grid' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {recentGallery.map((item, idx) => (
-              <div
-                key={item.id}
-                onClick={() => {
-                  setActiveGallerySlideIndex(idx);
-                  setActiveLightbox(item);
-                }}
-                className="group relative rounded-xl overflow-hidden bg-slate-900 aspect-[4/3] cursor-pointer border border-slate-200 shadow-sm hover:shadow-md"
-              >
-                <ImageWithFallback
-                  src={item.storage_path}
-                  alt={item.title}
-                  category={item.category}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-4 flex flex-col justify-end text-white">
-                  <span className="text-[10px] text-amber-300 font-semibold uppercase">{item.category}</span>
-                  <h4 className="text-xs font-semibold line-clamp-1">{item.title}</h4>
-                </div>
-              </div>
-            ))}
           </div>
         )}
 

@@ -25,6 +25,8 @@ export const AdminPagesPage: React.FC = () => {
     content: '',
     sections: [] as CustomPageSection[],
     slides: [] as CustomPageSlide[],
+    auto_play_slides: true,
+    slide_interval_seconds: 5,
     gallery: [] as CustomPageGalleryItem[],
     audio_title: '',
     audio_speaker: 'Evangelist S. O. Okon',
@@ -90,6 +92,8 @@ export const AdminPagesPage: React.FC = () => {
           caption: 'Believers assembling for open-air biblical training and prayer.',
         },
       ],
+      auto_play_slides: true,
+      slide_interval_seconds: 5,
       gallery: [
         {
           id: `g-${Date.now()}`,
@@ -120,6 +124,8 @@ export const AdminPagesPage: React.FC = () => {
       content: item.content || '',
       sections: item.sections || [],
       slides: item.slides || [],
+      auto_play_slides: item.auto_play_slides !== false,
+      slide_interval_seconds: item.slide_interval_seconds || 5,
       gallery: item.gallery || [],
       audio_title: item.audio_title || '',
       audio_speaker: item.audio_speaker || 'Evangelist S. O. Okon',
@@ -794,6 +800,45 @@ export const AdminPagesPage: React.FC = () => {
               {/* TAB 3: SLIDESHOW / SLIDES */}
               {activeTab === 'slides' && (
                 <div className="space-y-4">
+                  {/* ADMIN SLIDE SETTINGS PANEL */}
+                  <div className="p-4 rounded-xl bg-amber-50 border border-amber-200/80 space-y-3">
+                    <h5 className="text-xs font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>⚙️ Public Slideshow Behavior Settings</span>
+                    </h5>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-slate-800">
+                        <input
+                          type="checkbox"
+                          checked={formData.auto_play_slides !== false}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, auto_play_slides: e.target.checked }))}
+                          className="w-4 h-4 rounded text-emerald-900 focus:ring-amber-400 cursor-pointer"
+                        />
+                        <span>Auto-rotate slides on public page</span>
+                      </label>
+
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs font-semibold text-slate-700 whitespace-nowrap">
+                          Slide Interval:
+                        </label>
+                        <select
+                          value={formData.slide_interval_seconds || 5}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              slide_interval_seconds: Number(e.target.value),
+                            }))
+                          }
+                          className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-white border border-amber-300 text-slate-900 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                        >
+                          <option value={3}>3 seconds per slide</option>
+                          <option value={5}>5 seconds per slide (Recommended)</option>
+                          <option value={7}>7 seconds per slide</option>
+                          <option value={10}>10 seconds per slide</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
