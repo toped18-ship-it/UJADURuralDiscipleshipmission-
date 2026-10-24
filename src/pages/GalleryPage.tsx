@@ -9,6 +9,7 @@ export const GalleryPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeLightbox, setActiveLightbox] = useState<GalleryItem | null>(null);
+  const [activeSlideIndex, setActiveSlideIndex] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [visibleCount, setVisibleCount] = useState<number>(6);
 
@@ -30,6 +31,25 @@ export const GalleryPage: React.FC = () => {
   );
 
   const visibleImages = filteredImages.slice(0, visibleCount);
+
+  const handleOpenSlide = (img: GalleryItem, idx: number) => {
+    setActiveLightbox(img);
+    setActiveSlideIndex(idx);
+  };
+
+  const handlePrevSlide = () => {
+    if (filteredImages.length === 0) return;
+    const newIdx = (activeSlideIndex - 1 + filteredImages.length) % filteredImages.length;
+    setActiveSlideIndex(newIdx);
+    setActiveLightbox(filteredImages[newIdx]);
+  };
+
+  const handleNextSlide = () => {
+    if (filteredImages.length === 0) return;
+    const newIdx = (activeSlideIndex + 1) % filteredImages.length;
+    setActiveSlideIndex(newIdx);
+    setActiveLightbox(filteredImages[newIdx]);
+  };
 
   return (
     <div className="space-y-12 pb-16">
@@ -109,10 +129,10 @@ export const GalleryPage: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {visibleImages.map((img) => (
+            {visibleImages.map((img, idx) => (
               <div
                 key={img.id}
-                onClick={() => setActiveLightbox(img)}
+                onClick={() => handleOpenSlide(img, idx)}
                 className="group bg-white rounded-xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex flex-col"
               >
                 <div className="relative aspect-[4/3] bg-slate-900 overflow-hidden">
@@ -146,7 +166,7 @@ export const GalleryPage: React.FC = () => {
           <div className="text-center pt-6">
             <button
               onClick={() => setVisibleCount((prev) => prev + 6)}
-              className="px-6 py-2.5 rounded-lg bg-emerald-900 text-amber-300 hover:bg-emerald-800 text-xs font-semibold transition-colors shadow-sm"
+              className="px-6 py-2.5 rounded-lg bg-emerald-900 text-amber-300 hover:bg-emerald-800 text-xs font-semibold transition-colors shadow-sm cursor-pointer"
             >
               Load More Photographs ({filteredImages.length - visibleCount} remaining)
             </button>
@@ -154,31 +174,85 @@ export const GalleryPage: React.FC = () => {
         )}
       </div>
 
-      {/* LIGHTBOX MODAL */}
+      {/* ENLARGED PHOTO SLIDE MODAL WITH NAV CONTROLS */}
       {activeLightbox && (
-        <div className="fixed inset-0 z-50 bg-slate-950/90 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl max-w-3xl w-full overflow-hidden shadow-2xl relative space-y-4">
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/95 flex flex-col items-center justify-between p-4 sm:p-6 backdrop-blur-md"
+          onClick={() => setActiveLightbox(null)}
+        >
+          {/* Header Bar */}
+          <div
+            className="w-full max-w-6xl flex items-center justify-between text-white border-b border-slate-800 pb-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-amber-400 text-sm font-bold font-serif uppercase tracking-wider">
+                Outreach Photo Slide View
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-amber-300 text-xs font-mono font-bold border border-slate-700">
+                Photo {activeSlideIndex + 1} of {filteredImages.length}
+              </span>
+            </div>
             <button
               onClick={() => setActiveLightbox(null)}
-              className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-slate-900/80 text-white flex items-center justify-center hover:bg-slate-900"
+              className="w-10 h-10 rounded-full bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center font-bold text-xl cursor-pointer transition-colors"
             >
               ✕
             </button>
-            <div className="max-h-[65vh] overflow-hidden bg-slate-900">
-              <ImageWithFallback
-                src={activeLightbox.storage_path}
-                alt={activeLightbox.title}
-                className="w-full h-full object-contain max-h-[65vh] mx-auto"
-              />
+          </div>
+
+          {/* Main Photo Container */}
+          <div
+            className="relative w-full max-w-6xl flex-1 flex items-center justify-center my-4 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ImageWithFallback
+              src={activeLightbox.storage_path}
+              alt={activeLightbox.title}
+              category={activeLightbox.category}
+              className="max-h-[75vh] max-w-full object-contain rounded-2xl shadow-2xl border border-slate-800 mx-auto"
+            />
+
+            {/* Left and Right Slide Arrows */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handlePrevSlide();
+              }}
+              aria-label="Previous photo slide"
+              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-slate-900/80 hover:bg-slate-900 text-amber-300 border border-amber-400/30 flex items-center justify-center text-3xl font-bold transition-transform hover:scale-110 shadow-2xl cursor-pointer"
+            >
+              ‹
+            </button>
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleNextSlide();
+              }}
+              aria-label="Next photo slide"
+              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-slate-900/80 hover:bg-slate-900 text-amber-300 border border-amber-400/30 flex items-center justify-center text-3xl font-bold transition-transform hover:scale-110 shadow-2xl cursor-pointer"
+            >
+              ›
+            </button>
+          </div>
+
+          {/* Footer Details */}
+          <div
+            className="w-full max-w-4xl text-center space-y-2 text-white bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-center gap-3 text-xs text-amber-300">
+              <span className="font-bold uppercase tracking-wider">{activeLightbox.category}</span>
+              <span>·</span>
+              <span>{activeLightbox.event_date} {activeLightbox.location ? `· ${activeLightbox.location}` : ''}</span>
             </div>
-            <div className="p-6 space-y-2">
-              <div className="flex items-center justify-between text-xs text-slate-500">
-                <span className="font-semibold text-emerald-900">{activeLightbox.category}</span>
-                <span>{activeLightbox.event_date} · {activeLightbox.location || 'Rural Mission Base'}</span>
-              </div>
-              <h3 className="text-xl font-serif font-bold text-slate-900">{activeLightbox.title}</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">{activeLightbox.description}</p>
-            </div>
+            <h3 className="text-xl sm:text-2xl font-serif font-bold text-white">{activeLightbox.title}</h3>
+            {activeLightbox.description && (
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-2xl mx-auto">
+                {activeLightbox.description}
+              </p>
+            )}
           </div>
         </div>
       )}
