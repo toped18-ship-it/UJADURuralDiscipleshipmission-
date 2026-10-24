@@ -322,7 +322,7 @@ export const HomePage: React.FC = () => {
               to="/gallery"
               className="text-xs font-semibold text-emerald-900 hover:text-amber-600 flex items-center gap-1 shrink-0"
             >
-              <span>View Full Gallery ({recentGallery.length}+)</span>
+              <span>View Full Gallery</span>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
               </svg>
@@ -414,32 +414,6 @@ export const HomePage: React.FC = () => {
                 ))}
               </div>
             </div>
-
-            {/* THUMBNAIL FILMSTRIP */}
-            <div className="flex items-center gap-3 overflow-x-auto py-2 px-1 no-scrollbar">
-              {recentGallery.map((item, idx) => (
-                <button
-                  key={item.id || idx}
-                  onClick={() => setActiveGallerySlideIndex(idx)}
-                  className={`relative rounded-xl overflow-hidden shrink-0 transition-all cursor-pointer border-2 ${
-                    idx === activeGallerySlideIndex
-                      ? 'border-amber-400 ring-2 ring-amber-400/40 scale-105 shadow-md w-28 h-18 sm:w-36 sm:h-22'
-                      : 'border-transparent opacity-70 hover:opacity-100 w-24 h-16 sm:w-32 sm:h-20'
-                  }`}
-                >
-                  <ImageWithFallback
-                    src={item.storage_path}
-                    alt={item.title}
-                    category={item.category}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-black/20" />
-                  <div className="absolute bottom-1 left-1.5 text-[10px] font-mono font-bold text-white drop-shadow">
-                    #{idx + 1}
-                  </div>
-                </button>
-              ))}
-            </div>
           </div>
         )}
 
@@ -457,9 +431,6 @@ export const HomePage: React.FC = () => {
               <div className="flex items-center gap-3">
                 <span className="text-amber-400 text-sm font-bold font-serif uppercase tracking-wider">
                   Outreach Photo Slide
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-amber-300 text-xs font-mono font-bold border border-slate-700">
-                  {activeGallerySlideIndex + 1} / {recentGallery.length}
                 </span>
               </div>
               <button

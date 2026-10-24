@@ -189,9 +189,6 @@ export const GalleryPage: React.FC = () => {
               <span className="text-amber-400 text-sm font-bold font-serif uppercase tracking-wider">
                 Outreach Photo Slide View
               </span>
-              <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-amber-300 text-xs font-mono font-bold border border-slate-700">
-                Photo {activeSlideIndex + 1} of {filteredImages.length}
-              </span>
             </div>
             <button
               onClick={() => setActiveLightbox(null)}

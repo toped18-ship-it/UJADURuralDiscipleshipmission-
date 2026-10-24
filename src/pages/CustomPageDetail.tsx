@@ -175,9 +175,6 @@ export const CustomPageDetail: React.FC = () => {
               <div className="flex items-center gap-3">
                 <h2 className="text-xl font-serif font-bold text-slate-900 flex items-center gap-2">
                   <span>Photo Slideshow</span>
-                  <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-xs font-mono font-bold border border-amber-300">
-                    Slide {activeSlideIndex + 1} of {page.slides.length}
-                  </span>
                 </h2>
               </div>
 
@@ -274,33 +271,6 @@ export const CustomPageDetail: React.FC = () => {
                 ))}
               </div>
             </div>
-
-            {/* THUMBNAIL FILMSTRIP BAR */}
-            {page.slides.length > 1 && (
-              <div className="flex items-center gap-3 overflow-x-auto py-2 px-1 no-scrollbar">
-                {page.slides.map((slide, idx) => (
-                  <button
-                    key={slide.id || idx}
-                    onClick={() => setActiveSlideIndex(idx)}
-                    className={`relative rounded-xl overflow-hidden shrink-0 transition-all cursor-pointer border-2 ${
-                      idx === activeSlideIndex
-                        ? 'border-amber-400 ring-2 ring-amber-400/40 scale-105 shadow-md w-28 h-18 sm:w-36 sm:h-22'
-                        : 'border-transparent opacity-70 hover:opacity-100 w-24 h-16 sm:w-32 sm:h-20'
-                    }`}
-                  >
-                    <ImageWithFallback
-                      src={slide.image_url}
-                      alt={slide.title || `Thumbnail ${idx + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-black/20" />
-                    <div className="absolute bottom-1 left-1.5 text-[10px] font-mono font-bold text-white drop-shadow">
-                      #{idx + 1}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
           </section>
         )}
 
@@ -517,9 +487,6 @@ export const CustomPageDetail: React.FC = () => {
             <div className="flex items-center gap-3">
               <span className="text-amber-400 text-sm font-bold font-serif uppercase tracking-wider">
                 Full Screen Slide View
-              </span>
-              <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-amber-300 text-xs font-mono font-bold border border-slate-700">
-                {activeSlideIndex + 1} / {page.slides.length}
               </span>
             </div>
             <button
